@@ -1,0 +1,7 @@
+# API密钥配置（请勿提交到Git）
+# 百度OCR
+BAIDU_API_KEY=your_baidu_api_key
+BAIDU_SECRET_KEY=your_baidu_secret_key
+
+# DeepSeek
+DEEPSEEK_API_KEY=your_deepseek_api_key

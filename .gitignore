@@ -1,0 +1,24 @@
+# 密钥与配置
+config.ini
+*.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# 上传文件与缓存
+uploads/
+upload_cache/
+发票照片/
+
+# 日志
+*.log
+server*.log
+
+# 生成的Excel
+进项发票记录_*.xlsx
+
+# 临时文件
+*.tmp
+.DS_Store
