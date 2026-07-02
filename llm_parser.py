@@ -17,7 +17,7 @@ X坐标可以帮助你判断文字属于表格的哪一列：X越小越靠左（
 
 提取规则：
 1. 品名：去掉星号标记，保留分类和名称。如"*齿轮*减速机"提取为"齿轮减速机"
-2. 数量：纯数字。OCR可能漏识别数量列，此时用 金额÷单价 计算数量
+2. 数量：纯数字。如果数量未识别到，留空""，绝对不要默认为1或任何猜测值。系统后处理会用 金额÷单价 自动计算
 3. 单价：保留原始精度
 4. 金额：该行的小计金额
 5. 税率：如"13%"
@@ -27,13 +27,14 @@ X坐标可以帮助你判断文字属于表格的哪一列：X越小越靠左（
 9. 发票总金额：价税合计（小写）金额
 10. 如果某个字段无法识别，留空字符串""
 
-关键规则——数量与单价的拆分：
-OCR常把"数量"和"单价"合并成一个数字。例如数量"1"和单价"119.469"被OCR读成"1119.469"。
-请用数学验证来拆分：
-- 验证公式：金额 ≈ 单价 × 数量，税额 ≈ 金额 × 税率
-- 如果某个数字×1≠金额，但去掉首位数字后×该数字=金额，则首位数字是数量
-  例：OCR读到"1119.469"，金额=119.47 → 数量=1，单价=119.469
-- 如果OCR没有识别到数量列，直接用 金额÷单价 计算数量（取整数或保留2位小数）
+关键规则——数量与单价的处理：
+OCR常把"数量"和"单价"合并成一个数字（因为两列靠得很近）。例如数量"2"和单价"30"被OCR读成"230"。
+处理方式：
+1. 如果数量和单价分别识别到了，分别填入qty和price字段
+2. 如果你认为某个数字是"数量+单价"的合并值（数字异常大），将合并值放入price字段，qty字段留空""
+3. 如果只识别到单价、没有数量，qty留空""
+4. 绝对不要将qty默认为1或任何猜测值，不确定就留空""，系统后处理会用"金额=数量×单价"自动拆分和验证
+5. 不要自行做数学计算或拆分数字
 
 关键规则——规格型号换行合并：
 规格可能分两行显示，如"5IK90GU-YF-"和"J+5GU10KB"是同一个规格，需合并为"5IK90GU-YF-J+5GU10KB"。
@@ -141,6 +142,161 @@ def format_ocr_text_with_coords(ocr_results):
     return "\n".join(lines)
 
 
+# ==================== 数量×单价=金额 验证修复 ====================
+
+def _parse_number(s):
+    """将字符串解析为浮点数，处理空格、逗号、￥等"""
+    if not s:
+        return None
+    s = str(s).strip().replace(",", "").replace(" ", "").replace("￥", "").replace("¥", "")
+    if not s:
+        return None
+    try:
+        return float(s)
+    except ValueError:
+        return None
+
+
+def _try_split_merged(merged_str, amount, tolerance=0.005):
+    """
+    尝试将合并的"数量+单价"字符串拆分为 (数量, 单价)
+    使得 数量 × 单价 ≈ 金额
+    例: "2261.0619469026549", amount=522.12 → ("2", "261.0619469026549")
+    """
+    s = str(merged_str).strip().replace(",", "").replace(" ", "").replace("￥", "").replace("¥", "")
+    if not s:
+        return None
+    amount_f = _parse_number(amount)
+    if amount_f is None or amount_f <= 0:
+        return None
+
+    # qty 通常是 1-2 位整数，从左到右尝试每个拆分点
+    for i in range(1, min(len(s), 10)):
+        left = s[:i]
+        right = s[i:]
+        try:
+            qty = float(left)
+            price = float(right)
+        except ValueError:
+            continue
+        if qty <= 0 or price <= 0:
+            continue
+        # 数量通常是整数或≤2位小数，拒绝把长小数当数量(如823.0088不是数量)
+        if _count_decimals(left) > 2:
+            continue
+        product = qty * price
+        if abs(product - amount_f) <= max(amount_f * tolerance, 0.5):
+            qty_str = str(int(qty)) if qty == int(qty) else left
+            return (qty_str, right)
+    return None
+
+
+def _count_decimals(s):
+    """计算字符串中小数点后的位数"""
+    s = str(s).strip().replace(",", "").replace(" ", "").replace("￥", "").replace("¥", "")
+    if "." not in s:
+        return 0
+    parts = s.split(".")
+    if len(parts) == 2:
+        return len(parts[1])
+    return 0
+
+
+def _validate_and_fix_items(items):
+    """
+    验证并修复每行明细的 数量×单价=金额 关系
+    处理OCR问题:
+    1. 数量被合并到单价中 (如 "2"+"30" → "230")
+    2. 数量完全丢失 (单价正确，qty为空)
+    3. LLM错误拆分合并值 (如把"1769.91"拆成qty=176, price=9.91)
+    4. qty和price被交换 (qty有多位小数, price是整数)
+    """
+    for item in items:
+        qty_raw = item.get("qty", "")
+        price_raw = item.get("price", "")
+        amount_raw = item.get("amount", "")
+
+        amount_f = _parse_number(amount_raw)
+        if amount_f is None or amount_f <= 0:
+            continue
+
+        qty_f = _parse_number(qty_raw)
+        price_f = _parse_number(price_raw)
+
+        # 预检查: 数量必须是正整数(允许±0.02 OCR误差)
+        # 非整数数量(如0.07, 1.05)说明价格错误，清空数量让后续策略重新计算
+        if qty_f is not None:
+            if qty_f < 0.5 or abs(qty_f - round(qty_f)) > 0.02:
+                item["qty"] = ""
+                qty_raw = ""
+                qty_f = None
+
+        # 策略0: 检查qty和price是否被交换
+        # qty通常是整数或短小数，price通常是长小数(>2位)
+        if qty_f is not None and price_f is not None:
+            qty_dec = _count_decimals(qty_raw)
+            price_dec = _count_decimals(price_raw)
+            if qty_dec > 2 and price_dec <= 2 and qty_f > price_f:
+                # qty像price，price像qty → 交换
+                item["qty"] = price_raw.strip()
+                item["price"] = qty_raw.strip()
+                qty_raw, price_raw = price_raw, qty_raw
+                qty_f, price_f = price_f, qty_f
+
+        # 检查当前是否已正确 (0.5%容差)
+        if qty_f is not None and price_f is not None:
+            product = qty_f * price_f
+            if abs(product - amount_f) <= max(amount_f * 0.005, 0.5):
+                continue  # 验证通过，无需修复
+
+        fixed = False
+
+        # 策略1: 拆分price (qty被合并到price中，或qty缺失但price是合并值)
+        if price_raw:
+            result = _try_split_merged(price_raw, amount_f)
+            if result:
+                item["qty"] = result[0]
+                item["price"] = result[1]
+                fixed = True
+
+        # 策略1.5: LLM可能错误拆分了合并值，尝试用合并值作为price重新计算qty
+        if not fixed and qty_raw and price_raw:
+            combined_str = str(qty_raw).strip().replace(",", "").replace(" ", "") + \
+                           str(price_raw).strip().replace(",", "").replace(" ", "")
+            combined_f = _parse_number(combined_str)
+            if combined_f and combined_f > 0:
+                calc_qty = amount_f / combined_f
+                if abs(calc_qty - round(calc_qty)) < 0.02 and round(calc_qty) > 0:
+                    item["qty"] = str(int(round(calc_qty)))
+                    item["price"] = combined_str
+                    fixed = True
+
+        # 策略2: 拆分qty (price被合并到qty中)
+        if not fixed and qty_raw:
+            result = _try_split_merged(qty_raw, amount_f)
+            if result:
+                item["qty"] = result[0]
+                item["price"] = result[1]
+                fixed = True
+
+        # 策略3: qty有效且为正整数但price缺失/错误 → price = amount / qty
+        if not fixed and qty_f is not None and qty_f > 0:
+            calc_price = amount_f / qty_f
+            item["price"] = str(round(calc_price, 6))
+            fixed = True
+
+        # 策略4: price有效但qty缺失/错误 → qty = amount / price
+        # 仅当计算出的qty为正整数时才填入，否则留空(不猜)
+        if not fixed and price_f is not None and price_f > 0:
+            calc_qty = amount_f / price_f
+            if abs(calc_qty - round(calc_qty)) < 0.02 and round(calc_qty) > 0:
+                item["qty"] = str(int(round(calc_qty)))
+                fixed = True
+            # else: 计算出的qty非整数，说明price可能错误，留空不填
+
+    return items
+
+
 def parse_with_deepseek(ocr_results, api_key):
     """
     用DeepSeek API解析OCR结果
@@ -176,6 +332,9 @@ def parse_with_deepseek(ocr_results, api_key):
         for key in ["name", "spec", "qty", "price", "amount", "tax_rate", "tax"]:
             if key not in item:
                 item[key] = ""
+
+    # 验证并修复 数量×单价=金额
+    _validate_and_fix_items(items)
 
     return {
         "date": result.get("date", ""),

@@ -3,120 +3,267 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>发票识别系统 V2 - 本地OCR引擎</title>
+    <title>发票识别系统 · 上海辉驰包装设备有限公司</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Poppins:wght@500;600;700&display=swap" rel="stylesheet">
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: "Microsoft YaHei", "PingFang SC", -apple-system, sans-serif;
-            background: #f0f2f5;
-            color: #333;
-            min-height: 100vh;
+        :root {
+            --primary: #3B82F6;
+            --primary-hover: #2563EB;
+            --primary-light: #EFF6FF;
+            --primary-border: #BFDBFE;
+            --secondary: #8B5CF6;
+            --success: #16A34A;
+            --success-hover: #15803D;
+            --warning: #D97706;
+            --danger: #DC2626;
+            --danger-hover: #B91C1C;
+            --surface: #FFFFFF;
+            --text: #111827;
+            --text-secondary: #6B7280;
+            --text-tertiary: #9CA3AF;
+            --border: #E5E7EB;
+            --border-light: #F3F4F6;
+            --bg: #F9FAFB;
+            --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+            --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
+            --shadow-lg: 0 4px 12px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
+            --radius: 8px;
+            --radius-lg: 12px;
         }
-        .header {
-            background: linear-gradient(135deg, #0d6e3e 0%, #1a8a4f 100%);
-            color: white;
-            padding: 20px 40px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-        }
-        .header h1 { font-size: 22px; font-weight: 600; }
-        .header p { font-size: 13px; opacity: 0.85; margin-top: 4px; }
-        .badge {
-            display: inline-block;
-            background: rgba(255,255,255,0.2);
-            padding: 2px 10px;
-            border-radius: 10px;
-            font-size: 11px;
-            margin-left: 8px;
-            vertical-align: middle;
-        }
-        .container { max-width: 1200px; margin: 30px auto; padding: 0 20px; }
 
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        /* ==================== Header ==================== */
+        .header {
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            padding: 16px 40px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: var(--shadow-sm);
+        }
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .header-logo {
+            width: 36px;
+            height: 36px;
+            background: var(--primary);
+            border-radius: var(--radius);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 700;
+            font-size: 16px;
+            font-family: 'Poppins', sans-serif;
+        }
+        .header h1 {
+            font-family: 'Poppins', 'Inter', sans-serif;
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--text);
+            letter-spacing: -0.01em;
+        }
+        .header p {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 1px;
+        }
+        .header-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: var(--primary-light);
+            color: var(--primary);
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 500;
+            border: 1px solid var(--primary-border);
+        }
+        .header-tag::before {
+            content: '';
+            width: 6px;
+            height: 6px;
+            background: var(--success);
+            border-radius: 50%;
+        }
+
+        /* ==================== Container ==================== */
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 32px 24px;
+        }
+
+        /* ==================== Upload ==================== */
         .upload-card {
-            background: white;
-            border-radius: 12px;
-            padding: 40px;
-            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 32px;
             margin-bottom: 24px;
+            box-shadow: var(--shadow-sm);
         }
         .upload-zone {
-            border: 3px dashed #aac8b8;
-            border-radius: 12px;
-            padding: 50px 20px;
+            border: 2px dashed var(--border);
+            border-radius: var(--radius-lg);
+            padding: 48px 24px;
             text-align: center;
             cursor: pointer;
-            transition: all 0.3s;
-            background: #f8fdf9;
+            transition: border-color 0.2s ease, background 0.2s ease;
+            background: var(--bg);
         }
-        .upload-zone:hover, .upload-zone.dragover {
-            border-color: #0d6e3e;
-            background: #e8f5ed;
+        .upload-zone:hover,
+        .upload-zone:focus-visible,
+        .upload-zone.dragover {
+            border-color: var(--primary);
+            background: var(--primary-light);
+            outline: none;
         }
-        .upload-zone .icon { font-size: 48px; margin-bottom: 16px; }
-        .upload-zone h3 { font-size: 18px; color: #0d6e3e; margin-bottom: 8px; }
-        .upload-zone p { font-size: 14px; color: #666; }
-        .upload-zone .formats { margin-top: 12px; font-size: 12px; color: #999; }
-
-        .btn {
-            display: inline-block;
-            padding: 10px 24px;
-            border-radius: 8px;
-            font-size: 14px;
+        .upload-zone .icon {
+            width: 56px;
+            height: 56px;
+            margin: 0 auto 16px;
+            background: var(--primary-light);
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .upload-zone .icon svg {
+            width: 28px;
+            height: 28px;
+            color: var(--primary);
+        }
+        .upload-zone h3 {
+            font-family: 'Poppins', 'Inter', sans-serif;
+            font-size: 16px;
             font-weight: 600;
-            cursor: pointer;
-            border: none;
-            transition: all 0.2s;
+            color: var(--text);
+            margin-bottom: 6px;
         }
-        .btn-primary { background: #0d6e3e; color: white; }
-        .btn-primary:hover { background: #0a5a32; }
-        .btn-success { background: #34a853; color: white; }
-        .btn-success:hover { background: #2d8e47; }
-        .btn-danger { background: #ea4335; color: white; }
-        .btn-danger:hover { background: #c53229; }
-        .btn-secondary { background: #e0e0e0; color: #555; }
-        .btn-secondary:hover { background: #d0d0d0; }
-        .btn-lg { padding: 12px 32px; font-size: 15px; }
+        .upload-zone p {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+        .upload-zone .formats {
+            margin-top: 16px;
+            font-size: 11px;
+            color: var(--text-tertiary);
+            font-weight: 400;
+        }
 
+        /* ==================== Progress ==================== */
         .progress-section { margin-top: 20px; display: none; }
         .progress-section.active { display: block; }
         .progress-item {
             display: flex;
             align-items: center;
-            padding: 10px 16px;
-            background: #f8f9fa;
-            border-radius: 8px;
+            padding: 12px 16px;
+            background: var(--bg);
+            border: 1px solid var(--border-light);
+            border-radius: var(--radius);
             margin-bottom: 8px;
-            font-size: 14px;
+            font-size: 13px;
         }
         .progress-item .spinner {
-            width: 18px; height: 18px;
-            border: 2px solid #ddd;
-            border-top-color: #0d6e3e;
+            width: 16px; height: 16px;
+            border: 2px solid var(--border);
+            border-top-color: var(--primary);
             border-radius: 50%;
-            animation: spin 0.8s linear infinite;
+            animation: spin 0.7s linear infinite;
             margin-right: 12px;
+            flex-shrink: 0;
         }
-        .progress-item .check { color: #34a853; margin-right: 12px; font-size: 18px; }
-        .progress-item .cross { color: #ea4335; margin-right: 12px; font-size: 18px; }
-        .progress-item .info { color: #555; flex: 1; }
-        .progress-item .detail { color: #999; font-size: 12px; }
+        .progress-item .check {
+            color: var(--success);
+            margin-right: 12px;
+            font-size: 16px;
+            flex-shrink: 0;
+        }
+        .progress-item .cross {
+            color: var(--danger);
+            margin-right: 12px;
+            font-size: 16px;
+            flex-shrink: 0;
+        }
+        .progress-item .warn {
+            color: var(--warning);
+            margin-right: 12px;
+            font-size: 16px;
+            flex-shrink: 0;
+        }
+        .progress-item.warning {
+            background: #FFFBEB;
+            border-color: #FDE68A;
+        }
+        .progress-item .info {
+            color: var(--text);
+            flex: 1;
+            font-weight: 500;
+        }
+        .progress-item .detail {
+            color: var(--text-secondary);
+            font-size: 12px;
+        }
         @keyframes spin { to { transform: rotate(360deg); } }
 
-        .stats { display: flex; gap: 16px; margin-bottom: 24px; }
-        .stat-card {
-            background: white;
-            border-radius: 12px;
-            padding: 20px 28px;
-            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
-            flex: 1;
-            text-align: center;
+        /* ==================== Stats ==================== */
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            margin-bottom: 24px;
         }
-        .stat-card .num { font-size: 32px; font-weight: 700; color: #0d6e3e; }
-        .stat-card .label { font-size: 13px; color: #666; margin-top: 4px; }
+        .stat-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 24px;
+            box-shadow: var(--shadow-sm);
+        }
+        .stat-card .stat-label {
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+        .stat-card .stat-num {
+            font-family: 'Poppins', 'Inter', sans-serif;
+            font-size: 30px;
+            font-weight: 700;
+            color: var(--text);
+            margin-top: 8px;
+            letter-spacing: -0.02em;
+        }
+        .stat-card .stat-num.accent { color: var(--primary); }
 
+        /* ==================== Results ==================== */
         .results-card {
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-sm);
             overflow: hidden;
             margin-bottom: 24px;
         }
@@ -125,52 +272,185 @@
             justify-content: space-between;
             align-items: center;
             padding: 20px 24px;
-            border-bottom: 1px solid #eee;
+            border-bottom: 1px solid var(--border);
         }
-        .results-header h2 { font-size: 18px; }
+        .results-header h2 {
+            font-family: 'Poppins', 'Inter', sans-serif;
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text);
+        }
+
         .table-wrap { overflow-x: auto; }
-        table { width: 100%; border-collapse: collapse; font-size: 13px; }
-        thead { background: #f8f9fa; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        thead { background: var(--bg); }
         th {
             padding: 12px 10px;
             text-align: center;
             font-weight: 600;
-            color: #555;
-            border-bottom: 2px solid #e0e0e0;
+            font-size: 12px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+            border-bottom: 1px solid var(--border);
             white-space: nowrap;
+            background: var(--bg);
         }
         td {
-            padding: 10px 10px;
+            padding: 12px 10px;
             text-align: center;
-            border-bottom: 1px solid #f0f0f0;
-            color: #333;
+            border-bottom: 1px solid var(--border-light);
+            color: var(--text);
+            font-weight: 400;
         }
         td.left { text-align: left; }
-        tr.invoice-start { border-top: 2px solid #0d6e3e; }
-        tr.invoice-start td { background: #f0f9f3; }
+        tbody tr:hover { background: var(--primary-light); }
+        tr.invoice-start { border-top: 2px solid var(--primary); }
+        tr.invoice-start td { background: var(--primary-light); }
+        tr.invoice-start:hover td { background: #DBEAFE; }
 
+        /* ==================== Buttons ==================== */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 16px;
+            border-radius: var(--radius);
+            font-family: 'Inter', sans-serif;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            border: 1px solid transparent;
+            transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+            min-height: 36px;
+            text-decoration: none;
+        }
+        .btn:focus-visible {
+            outline: 2px solid var(--primary);
+            outline-offset: 2px;
+        }
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+        .btn-primary:hover { background: var(--primary-hover); }
+        .btn-success {
+            background: var(--success);
+            color: white;
+        }
+        .btn-success:hover { background: var(--success-hover); }
+        .btn-danger {
+            background: var(--danger);
+            color: white;
+        }
+        .btn-danger:hover { background: var(--danger-hover); }
+        .btn-secondary {
+            background: var(--surface);
+            color: var(--text-secondary);
+            border: 1px solid var(--border);
+        }
+        .btn-secondary:hover {
+            background: var(--bg);
+            border-color: #D1D5DB;
+        }
+        .btn-lg {
+            padding: 12px 28px;
+            font-size: 14px;
+            min-height: 44px;
+        }
+        .btn-sm {
+            padding: 4px 10px;
+            font-size: 12px;
+            min-height: 28px;
+        }
+
+        /* ==================== Sort Selector ==================== */
+        .sort-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .sort-group label {
+            font-size: 12px;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+        .sort-select {
+            padding: 6px 28px 6px 12px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            font-family: 'Inter', sans-serif;
+            font-size: 13px;
+            color: var(--text);
+            background: var(--surface);
+            cursor: pointer;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' viewBox='0 0 24 24' stroke='%236B7280' stroke-width='2'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19.5 8.25l-7.5 7.5-7.5-7.5'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 8px center;
+            transition: border-color 0.15s ease;
+            min-height: 36px;
+        }
+        .sort-select:hover { border-color: #D1D5DB; }
+        .sort-select:focus-visible {
+            outline: 2px solid var(--primary);
+            outline-offset: 1px;
+        }
+
+        /* ==================== Action Bar ==================== */
         .action-bar {
             display: flex;
             gap: 12px;
             justify-content: center;
-            padding: 20px;
-            background: #f8f9fa;
+            padding: 24px;
+            border-top: 1px solid var(--border);
+            background: var(--bg);
+        }
+
+        /* ==================== Responsive ==================== */
+        @media (max-width: 768px) {
+            .header { padding: 12px 16px; }
+            .container { padding: 16px; }
+            .upload-card { padding: 16px; }
+            .stats { grid-template-columns: 1fr; }
+            .header-tag { display: none; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: 0.01ms !important;
+                transition-duration: 0.01ms !important;
+            }
         }
     </style>
 </head>
 <body>
-    <div class="header">
-        <h1>发票识别系统 V2<span class="badge">本地OCR · 无需联网</span></h1>
-        <p>上海辉驰包装设备有限公司 · 财务部</p>
-    </div>
+    <header class="header">
+        <div class="header-left">
+            <div class="header-logo">辉</div>
+            <div>
+                <h1>发票识别系统</h1>
+                <p>上海辉驰包装设备有限公司 · 财务部</p>
+            </div>
+        </div>
+        <span class="header-tag">本地OCR · 数据不外传</span>
+    </header>
 
     <div class="container">
         <div class="upload-card">
-            <div class="upload-zone" id="uploadZone">
-                <div class="icon">📄</div>
+            <div class="upload-zone" id="uploadZone" tabindex="0" role="button" aria-label="上传发票文件">
+                <div class="icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                    </svg>
+                </div>
                 <h3>拖拽发票文件到此处，或点击选择</h3>
                 <p>支持批量上传，系统自动识别发票内容并归类</p>
-                <div class="formats">支持格式：JPG / PNG / BMP / TIFF / PDF（本地识别，数据不上传）</div>
+                <div class="formats">支持格式：JPG / PNG / BMP / TIFF / PDF · 本地识别，数据不上传</div>
             </div>
             <input type="file" id="fileInput" multiple
                    accept=".jpg,.jpeg,.png,.bmp,.tif,.tiff,.pdf" style="display:none">
@@ -180,23 +460,32 @@
 
         <div class="stats" id="statsBar" style="display:none">
             <div class="stat-card">
-                <div class="num" id="statInvoices">0</div>
-                <div class="label">发票数量</div>
+                <div class="stat-label">发票数量</div>
+                <div class="stat-num" id="statInvoices">0</div>
             </div>
             <div class="stat-card">
-                <div class="num" id="statItems">0</div>
-                <div class="label">明细行数</div>
+                <div class="stat-label">明细行数</div>
+                <div class="stat-num" id="statItems">0</div>
             </div>
             <div class="stat-card">
-                <div class="num" id="statAmount">¥0</div>
-                <div class="label">价税合计</div>
+                <div class="stat-label">价税合计</div>
+                <div class="stat-num accent" id="statAmount">¥0</div>
             </div>
         </div>
 
         <div class="results-card" id="resultsCard" style="display:none">
             <div class="results-header">
                 <h2>识别结果</h2>
-                <button class="btn btn-secondary" onclick="clearAll()">清空全部</button>
+                <div class="sort-group">
+                    <label for="sortSelect">排序</label>
+                    <select class="sort-select" id="sortSelect" onchange="onSortChange()">
+                        <option value="date_desc">日期 ↓ 新到旧</option>
+                        <option value="date_asc">日期 ↑ 旧到新</option>
+                        <option value="amount_desc">金额 ↓ 高到低</option>
+                        <option value="amount_asc">金额 ↑ 低到高</option>
+                    </select>
+                    <button class="btn btn-secondary btn-sm" onclick="clearAll()">清空全部</button>
+                </div>
             </div>
             <div class="table-wrap">
                 <table>
@@ -222,7 +511,10 @@
             </div>
             <div class="action-bar">
                 <button class="btn btn-success btn-lg" onclick="downloadExcel()">
-                    ⬇ 下载 Excel
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                    </svg>
+                    下载 Excel
                 </button>
             </div>
         </div>
@@ -234,8 +526,16 @@
         const progressSection = document.getElementById('progressSection');
         const resultsCard = document.getElementById('resultsCard');
         const statsBar = document.getElementById('statsBar');
+        const sortSelect = document.getElementById('sortSelect');
+        let currentSort = 'date_desc';
 
         uploadZone.addEventListener('click', () => fileInput.click());
+        uploadZone.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                fileInput.click();
+            }
+        });
         uploadZone.addEventListener('dragover', (e) => {
             e.preventDefault();
             uploadZone.classList.add('dragover');
@@ -276,21 +576,31 @@
 
                     if (data.success) {
                         const inv = data.invoice;
+                        const retryTag = data.retry_count > 0
+                            ? ` | <span style="color:var(--warning);font-weight:500">重试${data.retry_count}次后成功</span>`
+                            : '';
                         item.innerHTML = `
-                            <div class="check">✅</div>
+                            <div class="check">&#10003;</div>
                             <div class="info">${file.name}</div>
-                            <div class="detail">${inv.seller_name} | ${inv.invoice_num} | ${inv.item_count}条明细</div>
+                            <div class="detail">${inv.seller_name} | ${inv.invoice_num} | ${inv.item_count}条明细${retryTag}</div>
+                        `;
+                    } else if (data.duplicate) {
+                        item.className = 'progress-item warning';
+                        item.innerHTML = `
+                            <div class="warn">&#9888;</div>
+                            <div class="info">${file.name}</div>
+                            <div class="detail">${data.warning}</div>
                         `;
                     } else {
                         item.innerHTML = `
-                            <div class="cross">❌</div>
+                            <div class="cross">&#10007;</div>
                             <div class="info">${file.name}</div>
                             <div class="detail">${data.error}</div>
                         `;
                     }
                 } catch (err) {
                     item.innerHTML = `
-                        <div class="cross">❌</div>
+                        <div class="cross">&#10007;</div>
                         <div class="info">${file.name}</div>
                         <div class="detail">错误: ${err.message}</div>
                     `;
@@ -301,9 +611,14 @@
         }
 
         async function loadResults() {
-            const resp = await fetch('/results');
+            const resp = await fetch('/results?sort=' + currentSort);
             const data = await resp.json();
             renderResults(data.invoices);
+        }
+
+        function onSortChange() {
+            currentSort = sortSelect.value;
+            loadResults();
         }
 
         function renderResults(invoices) {
@@ -314,7 +629,7 @@
                 return;
             }
             resultsCard.style.display = 'block';
-            statsBar.style.display = 'flex';
+            statsBar.style.display = 'grid';
 
             let totalItems = 0;
             let totalAmount = 0;
@@ -345,7 +660,7 @@
                         <td>${i === 0 ? inv.total_amount : ''}</td>
                         <td>${i === 0 ? 'NO.' + inv.invoice_num : ''}</td>
                         <td class="left">${inv.seller_name || ''}</td>
-                        <td>${i === 0 ? `<button class="btn btn-danger" style="padding:4px 10px;font-size:12px" onclick="deleteInvoice('${inv.id}')">删除</button>` : ''}</td>
+                        <td>${i === 0 ? `<button class="btn btn-danger btn-sm" onclick="deleteInvoice('${inv.id}')">删除</button>` : ''}</td>
                     `;
                     tbody.appendChild(tr);
                 });
@@ -367,7 +682,7 @@
         }
 
         function downloadExcel() {
-            window.location.href = '/download';
+            window.location.href = '/download?sort=' + currentSort;
         }
 
         loadResults();

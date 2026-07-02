@@ -130,11 +130,46 @@ def write_excel(invoices, output_path):
     for c in range(1, num_cols + 1):
         ws.cell(row=sum_row, column=c).border = thin_border
 
+    # 表头自动筛选 + 冻结窗格（方便在Excel中排序/筛选）
+    ws.auto_filter.ref = f"A2:L{max_row}"
+    ws.freeze_panes = "A3"
+
     wb.save(output_path)
 
 
 # ==================== 路由 ====================
 invoices_store = []
+
+
+def _parse_amount(s):
+    """将金额字符串转为float，用于排序"""
+    try:
+        return float(str(s).replace(",", "").replace("￥", "").replace("¥", "").strip() or "0")
+    except (ValueError, TypeError):
+        return 0.0
+
+
+def _sort_invoices(invoices, sort_by="date_desc"):
+    """排序发票列表：日期降序(默认)/升序/金额降序/升序"""
+    if sort_by == "amount_desc":
+        return sorted(invoices, key=lambda inv: _parse_amount(inv.get("total_amount", "0")), reverse=True)
+    elif sort_by == "amount_asc":
+        return sorted(invoices, key=lambda inv: _parse_amount(inv.get("total_amount", "0")))
+    elif sort_by == "date_asc":
+        return sorted(invoices, key=lambda inv: inv.get("date", "") or "")
+    else:  # date_desc (default): 最新日期在前
+        return sorted(invoices, key=lambda inv: inv.get("date", "") or "", reverse=True)
+
+
+def _has_missing_fields(invoice):
+    """检查是否有明细行缺少数量或单价（且有金额，说明应能识别到）"""
+    for item in invoice.get("items", []):
+        amount = item.get("amount", "").strip()
+        qty = item.get("qty", "").strip()
+        price = item.get("price", "").strip()
+        if amount and (not qty or not price):
+            return True
+    return False
 
 
 @app.route("/")
@@ -158,7 +193,29 @@ def upload():
 
     try:
         ocr_results = ocr_engine.recognize(file_path)
-        invoice = parse_with_deepseek(ocr_results, DEEPSEEK_API_KEY)
+
+        # LLM非确定性：如果数量/单价缺失，自动重试（OCR只跑一次，重试LLM）
+        max_attempts = 3
+        retry_count = 0
+        for attempt in range(max_attempts):
+            invoice = parse_with_deepseek(ocr_results, DEEPSEEK_API_KEY)
+            if not _has_missing_fields(invoice):
+                break
+            if attempt < max_attempts - 1:
+                retry_count += 1
+                print(f"  [重试 {retry_count}/{max_attempts-1}] {file.filename} 部分明细缺少数量/单价，重新解析...")
+
+        # 重复发票检测：按发票号码比对
+        inv_num = invoice.get("invoice_num", "")
+        if inv_num:
+            for existing in invoices_store:
+                if existing.get("invoice_num", "") == inv_num:
+                    return jsonify({
+                        "success": False,
+                        "duplicate": True,
+                        "warning": f"重复发票！票号 {inv_num} 已存在（来自 {existing.get('filename', '未知文件')}），已跳过。",
+                    })
+
         invoice["id"] = uuid.uuid4().hex
         invoice["filename"] = file.filename
         invoices_store.append(invoice)
@@ -166,6 +223,7 @@ def upload():
         return jsonify(
             {
                 "success": True,
+                "retry_count": retry_count,
                 "invoice": {
                     "id": invoice["id"],
                     "filename": invoice["filename"],
@@ -187,6 +245,8 @@ def upload():
 
 @app.route("/results")
 def results():
+    sort_by = request.args.get("sort", "date_desc")
+    sorted_invoices = _sort_invoices(invoices_store, sort_by)
     return jsonify(
         {
             "invoices": [
@@ -200,7 +260,7 @@ def results():
                     "item_count": len(inv["items"]),
                     "items": inv["items"],
                 }
-                for inv in invoices_store
+                for inv in sorted_invoices
             ]
         }
     )
@@ -211,9 +271,19 @@ def download():
     if not invoices_store:
         return jsonify({"error": "没有数据"}), 400
 
-    filename = f"进项发票记录_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    sort_by = request.args.get("sort", "date_desc")
+    sorted_invoices = _sort_invoices(invoices_store, sort_by)
+
+    sort_labels = {
+        "date_desc": "日期新到旧",
+        "date_asc": "日期旧到新",
+        "amount_desc": "金额高到低",
+        "amount_asc": "金额低到高",
+    }
+    sort_label = sort_labels.get(sort_by, "日期新到旧")
+    filename = f"进项发票记录_{sort_label}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
     output_path = os.path.join(UPLOAD_DIR, filename)
-    write_excel(invoices_store, output_path)
+    write_excel(sorted_invoices, output_path)
 
     return send_file(output_path, as_attachment=True, download_name=filename)
 
