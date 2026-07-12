@@ -37,7 +37,7 @@ PDF_EXTENSIONS = (".pdf",)
 ALL_EXTENSIONS = IMAGE_EXTENSIONS + PDF_EXTENSIONS
 
 app = Flask(__name__)
-app.secret_key = os.urandom(32)
+app.secret_key = "huichi-fapiao-2026-secret-key-fixed"
 app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024
 app.permanent_session_lifetime = timedelta(hours=24)
 
