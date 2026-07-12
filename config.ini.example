@@ -1,7 +1,9 @@
-# API密钥配置（请勿提交到Git）
-# 百度OCR
-BAIDU_API_KEY=your_baidu_api_key
-BAIDU_SECRET_KEY=your_baidu_secret_key
-
-# DeepSeek
+[DEFAULT]
+# DeepSeek API Key（管理员兜底用，用户登录后会用自己的Key覆盖）
 DEEPSEEK_API_KEY=your_deepseek_api_key
+
+# 固定账号（2个）
+ACCOUNT1_USERNAME=user1
+ACCOUNT1_PASSWORD=abc123
+ACCOUNT2_USERNAME=user2
+ACCOUNT2_PASSWORD=def456

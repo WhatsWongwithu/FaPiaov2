@@ -31,6 +31,21 @@ def get_baidu_keys():
 
 
 def get_deepseek_key():
-    """获取DeepSeek API Key"""
+    """获取DeepSeek API Key（兜底用）"""
     cfg = _load_config()
     return cfg.get("DEFAULT", "DEEPSEEK_API_KEY", fallback="") or cfg.get("deepseek", "api_key", fallback="")
+
+
+def get_accounts():
+    """获取2个固定账号配置"""
+    cfg = _load_config()
+    accounts = []
+    for i in (1, 2):
+        u = cfg.get("DEFAULT", f"ACCOUNT{i}_USERNAME", fallback="")
+        p = cfg.get("DEFAULT", f"ACCOUNT{i}_PASSWORD", fallback="")
+        if u and p:
+            accounts.append({"username": u, "password": p})
+    if not accounts:
+        accounts = [{"username": "user1", "password": "abc123"},
+                     {"username": "user2", "password": "def456"}]
+    return accounts

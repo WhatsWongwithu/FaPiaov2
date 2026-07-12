@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>登录 · 发票识别系统</title>
+    <title>设置 · 发票识别系统</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Poppins:wght@500;600;700&display=swap" rel="stylesheet">
@@ -11,7 +11,7 @@
         :root {
             --primary: #3B82F6; --primary-hover: #2563EB;
             --primary-light: #EFF6FF; --primary-border: #BFDBFE;
-            --success: #16A34A; --warning: #D97706; --danger: #DC2626;
+            --success: #16A34A; --danger: #DC2626;
             --surface: #FFFFFF; --text: #111827; --text-secondary: #6B7280;
             --text-tertiary: #9CA3AF; --border: #E5E7EB; --bg: #F9FAFB;
             --shadow-lg: 0 10px 40px rgba(0,0,0,0.08), 0 2px 10px rgba(0,0,0,0.04);
@@ -24,10 +24,10 @@
             min-height: 100vh; display: flex; align-items: center; justify-content: center;
             -webkit-font-smoothing: antialiased;
         }
-        .login-card {
+        .card {
             background: var(--surface); border: 1px solid var(--border);
             border-radius: var(--radius-lg); box-shadow: var(--shadow-lg);
-            width: 400px; max-width: 90vw; padding: 40px;
+            width: 480px; max-width: 90vw; padding: 40px;
         }
         .logo {
             width: 48px; height: 48px; background: var(--primary);
@@ -35,15 +35,20 @@
             justify-content: center; color: white; font-weight: 700;
             font-size: 20px; font-family: 'Poppins', sans-serif; margin: 0 auto 16px;
         }
-        .login-card h1 {
-            font-family: 'Poppins', 'Inter', sans-serif;
-            font-size: 20px; font-weight: 600; text-align: center;
-            color: var(--text); letter-spacing: -0.01em;
+        .card h1 {
+            font-family: 'Poppins', sans-serif; font-size: 20px; font-weight: 600;
+            text-align: center; margin-bottom: 8px;
         }
-        .login-card .subtitle {
-            font-size: 13px; color: var(--text-secondary);
-            text-align: center; margin-top: 4px; margin-bottom: 32px;
+        .card .subtitle {
+            font-size: 13px; color: var(--text-secondary); text-align: center;
+            margin-bottom: 32px;
         }
+        .info-box {
+            background: var(--primary-light); border: 1px solid var(--primary-border);
+            border-radius: var(--radius); padding: 16px; margin-bottom: 24px;
+        }
+        .info-box p { font-size: 13px; color: var(--text-secondary); line-height: 1.6; }
+        .info-box a { color: var(--primary); text-decoration: none; }
         .form-group { margin-bottom: 20px; }
         .form-group label {
             display: block; font-size: 13px; font-weight: 500;
@@ -52,8 +57,8 @@
         .form-input {
             width: 100%; padding: 10px 14px; border: 1px solid var(--border);
             border-radius: var(--radius); font-family: 'Inter', sans-serif;
-            font-size: 14px; color: var(--text); background: var(--surface);
-            transition: border-color 0.15s; outline: none;
+            font-size: 14px; color: var(--text); outline: none;
+            transition: border-color 0.15s;
         }
         .form-input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-light); }
         .btn {
@@ -69,26 +74,43 @@
         }
         .alert.error { background: #FEF2F2; color: var(--danger); border: 1px solid #FECACA; display: block; }
         .alert.success { background: #F0FDF4; color: var(--success); border: 1px solid #BBF7D0; display: block; }
+        .status-tag {
+            display: inline-block; padding: 2px 10px; border-radius: 20px;
+            font-size: 11px; font-weight: 500; margin-left: 8px;
+        }
+        .status-tag.has { background: #D1FAE5; color: var(--success); }
+        .status-tag.none { background: #FEF3C7; color: #D97706; }
     </style>
 </head>
 <body>
-    <div class="login-card">
+    <div class="card">
         <div class="logo">辉</div>
-        <h1>发票识别系统</h1>
-        <p class="subtitle">上海辉驰包装设备有限公司 · 财务部</p>
+        <h1>API Key 设置</h1>
+        <p class="subtitle">当前用户: {{ username }}</p>
+
+        <div class="info-box">
+            <p>请输入你的 DeepSeek API Key，系统会用它来解析发票。</p>
+            <p>申请地址: <a href="https://platform.deepseek.com" target="_blank">https://platform.deepseek.com</a></p>
+            <p>保存后自动记住，下次登录无需重复输入。</p>
+        </div>
 
         <div id="alertBox" class="alert"></div>
 
         <div class="form-group">
-            <label>用户名</label>
-            <input type="text" class="form-input" id="loginUser" placeholder="请输入用户名">
+            <label>
+                DeepSeek API Key
+                {% if has_key %}
+                <span class="status-tag has">已设置</span>
+                {% else %}
+                <span class="status-tag none">未设置</span>
+                {% endif %}
+            </label>
+            <input type="text" class="form-input" id="apiKey"
+                   placeholder="sk-xxxxxxxxxxxxxxxxxxxxxx"
+                   onkeydown="if(event.key==='Enter')doSave()">
         </div>
-        <div class="form-group">
-            <label>密码</label>
-            <input type="password" class="form-input" id="loginPass" placeholder="请输入密码"
-                   onkeydown="if(event.key==='Enter')doLogin()">
-        </div>
-        <button class="btn btn-primary" onclick="doLogin()">登录</button>
+
+        <button class="btn btn-primary" onclick="doSave()">保存</button>
     </div>
 
     <script>
@@ -98,22 +120,21 @@
             box.textContent = msg;
         }
 
-        async function doLogin() {
-            const username = document.getElementById('loginUser').value.trim();
-            const password = document.getElementById('loginPass').value;
-            if (!username || !password) { showAlert('error', '请输入用户名和密码'); return; }
+        async function doSave() {
+            const apiKey = document.getElementById('apiKey').value.trim();
+            if (!apiKey) { showAlert('error', '请输入API Key'); return; }
 
             try {
-                const resp = await fetch('/login', {
+                const resp = await fetch('/settings', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username, password }),
+                    body: JSON.stringify({ api_key: apiKey }),
                 });
                 const data = await resp.json();
                 if (data.success) {
                     window.location.href = data.redirect || '/';
                 } else {
-                    showAlert('error', data.error || '登录失败');
+                    showAlert('error', data.error || '保存失败');
                 }
             } catch (e) {
                 showAlert('error', '网络错误，请重试');

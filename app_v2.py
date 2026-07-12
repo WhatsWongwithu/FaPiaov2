@@ -23,9 +23,9 @@ from datetime import datetime, timedelta
 
 from ocr_engine import OCREngine
 from llm_parser import parse_with_deepseek
-from config import get_deepseek_key
+from config import get_deepseek_key, get_accounts
 
-DEEPSEEK_API_KEY = get_deepseek_key()
+FALLBACK_API_KEY = get_deepseek_key()
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
@@ -68,23 +68,35 @@ def init_db():
     """)
     conn.execute("""
         CREATE TABLE IF NOT EXISTS users (
-            id            INTEGER PRIMARY KEY AUTOINCREMENT,
-            username      TEXT UNIQUE NOT NULL,
-            password_hash TEXT NOT NULL,
-            is_admin      INTEGER DEFAULT 0,
-            status        TEXT DEFAULT 'pending',
-            created_at    TEXT
+            id                INTEGER PRIMARY KEY AUTOINCREMENT,
+            username          TEXT UNIQUE NOT NULL,
+            password_hash     TEXT NOT NULL,
+            deepseek_api_key  TEXT DEFAULT '',
+            created_at        TEXT
         )
     """)
-    count = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
-    if count == 0:
-        conn.execute(
-            "INSERT INTO users (username, password_hash, is_admin, status, created_at) VALUES (?,?,?,?,?)",
-            ("admin", generate_password_hash("admin123"), 1, "active", datetime.now().isoformat()),
-        )
-        print("  默认管理员: admin / admin123（请尽快修改密码）")
+    # 初始化2个固定账号
+    accounts = get_accounts()
+    for acc in accounts:
+        existing = conn.execute("SELECT 1 FROM users WHERE username = ?", (acc["username"],)).fetchone()
+        if not existing:
+            conn.execute(
+                "INSERT INTO users (username, password_hash, deepseek_api_key, created_at) VALUES (?,?,?,?)",
+                (acc["username"], generate_password_hash(acc["password"]), "", datetime.now().isoformat()),
+            )
+            print(f"  账号: {acc['username']} / {acc['password']}")
     conn.commit()
     conn.close()
+
+
+def get_user_api_key(user_id):
+    """从数据库取当前用户的 DeepSeek API Key，没有则返回兜底Key"""
+    conn = get_db()
+    row = conn.execute("SELECT deepseek_api_key FROM users WHERE id = ?", (user_id,)).fetchone()
+    conn.close()
+    if row and row["deepseek_api_key"]:
+        return row["deepseek_api_key"]
+    return FALLBACK_API_KEY
 
 
 # ==================== 认证装饰器 ====================
@@ -95,17 +107,6 @@ def login_required(f):
             if request.path.startswith("/api/") or request.is_json:
                 return jsonify({"error": "未登录", "redirect": "/login"}), 401
             return redirect("/login")
-        return f(*args, **kwargs)
-    return decorated
-
-
-def admin_required(f):
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        if "user_id" not in session:
-            return redirect("/login")
-        if not session.get("is_admin"):
-            return jsonify({"error": "需要管理员权限"}), 403
         return f(*args, **kwargs)
     return decorated
 
@@ -322,13 +323,10 @@ def login():
 
     if not user or not check_password_hash(user["password_hash"], password):
         return jsonify({"error": "用户名或密码错误"}), 401
-    if user["status"] != "active":
-        return jsonify({"error": "账号待审批，请联系管理员"}), 403
 
     session.permanent = True
     session["user_id"] = user["id"]
     session["username"] = user["username"]
-    session["is_admin"] = bool(user["is_admin"])
     return jsonify({"success": True, "redirect": "/"})
 
 
@@ -338,90 +336,39 @@ def logout():
     return redirect("/login")
 
 
-@app.route("/register", methods=["POST"])
-def register():
-    data = request.json or request.form
-    username = data.get("username", "").strip()
-    password = data.get("password", "")
-
-    if not username or not password:
-        return jsonify({"error": "用户名和密码不能为空"}), 400
-    if len(password) < 4:
-        return jsonify({"error": "密码至少4位"}), 400
-
-    conn = get_db()
-    if conn.execute("SELECT 1 FROM users WHERE username = ?", (username,)).fetchone():
+# ==================== API Key 设置 ====================
+@app.route("/settings", methods=["GET", "POST"])
+@login_required
+def settings():
+    if request.method == "GET":
+        conn = get_db()
+        user = conn.execute("SELECT deepseek_api_key FROM users WHERE id = ?",
+                            (session["user_id"],)).fetchone()
         conn.close()
-        return jsonify({"error": "用户名已存在"}), 400
+        has_key = bool(user and user["deepseek_api_key"])
+        return render_template("settings.html", username=session.get("username", ""), has_key=has_key)
 
-    conn.execute(
-        "INSERT INTO users (username, password_hash, is_admin, status, created_at) VALUES (?,?,?,?,?)",
-        (username, generate_password_hash(password), 0, "pending", datetime.now().isoformat()),
-    )
-    conn.commit()
-    conn.close()
-    return jsonify({"success": True, "message": "注册成功，等待管理员审批"})
-
-
-# ==================== 用户管理路由 ====================
-@app.route("/admin/users")
-@admin_required
-def admin_users_page():
-    return render_template("admin.html")
-
-
-@app.route("/api/users")
-@admin_required
-def api_users():
-    conn = get_db()
-    users = conn.execute(
-        "SELECT id, username, is_admin, status, created_at FROM users ORDER BY created_at DESC"
-    ).fetchall()
-    conn.close()
-    return jsonify({"users": [dict(u) for u in users]})
-
-
-@app.route("/api/users/<int:uid>/approve", methods=["POST"])
-@admin_required
-def approve_user(uid):
-    conn = get_db()
-    conn.execute("UPDATE users SET status = 'active' WHERE id = ?", (uid,))
-    conn.commit()
-    conn.close()
-    return jsonify({"success": True})
-
-
-@app.route("/api/users/<int:uid>/reject", methods=["POST"])
-@admin_required
-def reject_user(uid):
-    conn = get_db()
-    user = conn.execute("SELECT * FROM users WHERE id = ?", (uid,)).fetchone()
-    if user and user["is_admin"] == 1 and user["status"] == "active":
-        admin_count = conn.execute(
-            "SELECT COUNT(*) FROM users WHERE is_admin = 1 AND status = 'active'"
-        ).fetchone()[0]
-        if admin_count <= 1:
-            conn.close()
-            return jsonify({"error": "不能删除最后一个管理员"}), 400
-    conn.execute("DELETE FROM users WHERE id = ?", (uid,))
-    conn.commit()
-    conn.close()
-    return jsonify({"success": True})
-
-
-@app.route("/api/users/<int:uid>/password", methods=["POST"])
-@admin_required
-def reset_password(uid):
     data = request.json or request.form
-    new_pwd = data.get("password", "")
-    if len(new_pwd) < 4:
-        return jsonify({"error": "密码至少4位"}), 400
+    api_key = data.get("api_key", "").strip()
+    if not api_key:
+        return jsonify({"error": "请输入API Key"}), 400
+
     conn = get_db()
-    conn.execute("UPDATE users SET password_hash = ? WHERE id = ?",
-                 (generate_password_hash(new_pwd), uid))
+    conn.execute("UPDATE users SET deepseek_api_key = ? WHERE id = ?",
+                 (api_key, session["user_id"]))
     conn.commit()
     conn.close()
-    return jsonify({"success": True})
+    return jsonify({"success": True, "redirect": "/"})
+
+
+@app.route("/api/user/has_key")
+@login_required
+def has_api_key():
+    conn = get_db()
+    user = conn.execute("SELECT deepseek_api_key FROM users WHERE id = ?",
+                        (session["user_id"],)).fetchone()
+    conn.close()
+    return jsonify({"has_key": bool(user and user["deepseek_api_key"])})
 
 
 # ==================== 历史记录路由 ====================
@@ -480,9 +427,14 @@ def delete_history(hid):
 @app.route("/")
 @login_required
 def index():
+    conn = get_db()
+    user = conn.execute("SELECT deepseek_api_key FROM users WHERE id = ?",
+                        (session["user_id"],)).fetchone()
+    conn.close()
+    if not user or not user["deepseek_api_key"]:
+        return redirect("/settings")
     return render_template("index_v2.html",
-                           username=session.get("username", ""),
-                           is_admin=session.get("is_admin", False))
+                           username=session.get("username", ""))
 
 
 @app.route("/upload", methods=["POST"])
@@ -503,10 +455,11 @@ def upload():
     try:
         ocr_results = ocr_engine.recognize(file_path)
 
+        user_api_key = get_user_api_key(session["user_id"])
         max_attempts = 3
         retry_count = 0
         for attempt in range(max_attempts):
-            invoice = parse_with_deepseek(ocr_results, DEEPSEEK_API_KEY)
+            invoice = parse_with_deepseek(ocr_results, user_api_key)
             if not _has_missing_fields(invoice):
                 break
             if attempt < max_attempts - 1:

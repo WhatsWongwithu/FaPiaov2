@@ -230,9 +230,7 @@
                 <div class="avatar">{{ username[:1]|upper }}</div>
                 <span>{{ username }}</span>
             </div>
-            {% if is_admin %}
-            <a href="/admin/users" class="btn btn-secondary btn-sm">用户管理</a>
-            {% endif %}
+            <a href="/settings" class="btn btn-secondary btn-sm">设置</a>
             <a href="/logout" class="btn btn-secondary btn-sm">退出</a>
         </div>
     </header>
