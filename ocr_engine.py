@@ -6,6 +6,7 @@
 """
 
 import os
+import threading
 import fitz  # PyMuPDF
 import numpy as np
 from rapidocr_onnxruntime import RapidOCR
@@ -16,6 +17,7 @@ class OCREngine:
 
     def __init__(self):
         self._engine = None
+        self._lock = threading.Lock()
 
     @property
     def engine(self):
@@ -52,21 +54,19 @@ class OCREngine:
         return results
 
     def _ocr_image(self, image_path):
-        """用RapidOCR识别图片（自动放大2倍提高小字识别率）"""
+        """用RapidOCR识别图片（自适应放大提高小字识别率）"""
         import cv2
 
-        # 读取图片并放大2倍
         img = cv2.imread(image_path)
         if img is not None:
             h, w = img.shape[:2]
-            # 只放大小于4000px宽的图片
             if w < 4000:
                 img = cv2.resize(img, (w * 2, h * 2), interpolation=cv2.INTER_CUBIC)
+            with self._lock:
                 result, _ = self.engine(img)
-            else:
-                result, _ = self.engine(image_path)
         else:
-            result, _ = self.engine(image_path)
+            with self._lock:
+                result, _ = self.engine(image_path)
 
         if not result:
             return []
@@ -115,7 +115,8 @@ class OCREngine:
             images = self._pdf_to_images(file_path)
             all_results = []
             for img in images:
-                result, _ = self.engine(img)
+                with self._lock:
+                    result, _ = self.engine(img)
                 if result:
                     for line in result:
                         box, text, _ = line

@@ -12,6 +12,9 @@ uploads/
 upload_cache/
 发票照片/
 
+# 数据库
+history.db
+
 # 日志
 *.log
 server*.log

@@ -9,422 +9,210 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Poppins:wght@500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --primary: #3B82F6;
-            --primary-hover: #2563EB;
-            --primary-light: #EFF6FF;
-            --primary-border: #BFDBFE;
-            --secondary: #8B5CF6;
-            --success: #16A34A;
-            --success-hover: #15803D;
-            --warning: #D97706;
-            --danger: #DC2626;
-            --danger-hover: #B91C1C;
-            --surface: #FFFFFF;
-            --text: #111827;
-            --text-secondary: #6B7280;
-            --text-tertiary: #9CA3AF;
-            --border: #E5E7EB;
-            --border-light: #F3F4F6;
+            --primary: #3B82F6; --primary-hover: #2563EB;
+            --primary-light: #EFF6FF; --primary-border: #BFDBFE;
+            --secondary: #8B5CF6; --success: #16A34A; --success-hover: #15803D;
+            --warning: #D97706; --danger: #DC2626; --danger-hover: #B91C1C;
+            --surface: #FFFFFF; --text: #111827; --text-secondary: #6B7280;
+            --text-tertiary: #9CA3AF; --border: #E5E7EB; --border-light: #F3F4F6;
             --bg: #F9FAFB;
             --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
             --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
-            --shadow-lg: 0 4px 12px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
-            --radius: 8px;
-            --radius-lg: 12px;
+            --radius: 8px; --radius-lg: 12px;
+            --sidebar-w: 300px;
         }
-
         * { margin: 0; padding: 0; box-sizing: border-box; }
-
         body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            background: var(--bg);
-            color: var(--text);
-            min-height: 100vh;
+            font-family: 'Inter', -apple-system, sans-serif;
+            background: var(--bg); color: var(--text); min-height: 100vh;
             -webkit-font-smoothing: antialiased;
-            -moz-osx-font-smoothing: grayscale;
         }
 
         /* ==================== Header ==================== */
         .header {
-            background: var(--surface);
-            border-bottom: 1px solid var(--border);
-            padding: 16px 40px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            position: sticky;
-            top: 0;
-            z-index: 100;
+            background: var(--surface); border-bottom: 1px solid var(--border);
+            padding: 12px 32px; display: flex; align-items: center;
+            justify-content: space-between; position: sticky; top: 0; z-index: 100;
             box-shadow: var(--shadow-sm);
         }
-        .header-left {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
+        .header-left { display: flex; align-items: center; gap: 12px; }
         .header-logo {
-            width: 36px;
-            height: 36px;
-            background: var(--primary);
-            border-radius: var(--radius);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: 700;
-            font-size: 16px;
-            font-family: 'Poppins', sans-serif;
+            width: 36px; height: 36px; background: var(--primary);
+            border-radius: var(--radius); display: flex; align-items: center;
+            justify-content: center; color: white; font-weight: 700;
+            font-size: 16px; font-family: 'Poppins', sans-serif;
         }
         .header h1 {
-            font-family: 'Poppins', 'Inter', sans-serif;
-            font-size: 18px;
-            font-weight: 600;
-            color: var(--text);
-            letter-spacing: -0.01em;
+            font-family: 'Poppins', sans-serif; font-size: 17px;
+            font-weight: 600; letter-spacing: -0.01em;
         }
-        .header p {
-            font-size: 12px;
-            color: var(--text-secondary);
-            margin-top: 1px;
+        .header p { font-size: 11px; color: var(--text-secondary); margin-top: 1px; }
+        .header-right { display: flex; align-items: center; gap: 12px; }
+        .user-info {
+            font-size: 13px; color: var(--text-secondary);
+            display: flex; align-items: center; gap: 6px;
         }
-        .header-tag {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            background: var(--primary-light);
-            color: var(--primary);
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 11px;
-            font-weight: 500;
-            border: 1px solid var(--primary-border);
-        }
-        .header-tag::before {
-            content: '';
-            width: 6px;
-            height: 6px;
-            background: var(--success);
-            border-radius: 50%;
+        .user-info .avatar {
+            width: 28px; height: 28px; border-radius: 50%;
+            background: var(--primary-light); color: var(--primary);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 12px; font-weight: 600;
         }
 
-        /* ==================== Container ==================== */
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 32px 24px;
+        /* ==================== Layout ==================== */
+        .layout { display: flex; min-height: calc(100vh - 61px); }
+
+        /* ==================== Sidebar ==================== */
+        .sidebar {
+            width: var(--sidebar-w); flex-shrink: 0; background: var(--surface);
+            border-right: 1px solid var(--border); display: flex; flex-direction: column;
         }
+        .sidebar-search {
+            padding: 16px; border-bottom: 1px solid var(--border);
+        }
+        .search-wrap { position: relative; }
+        .search-wrap svg {
+            position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+            width: 16px; height: 16px; color: var(--text-tertiary);
+        }
+        .search-input {
+            width: 100%; padding: 8px 12px 8px 34px; border: 1px solid var(--border);
+            border-radius: var(--radius); font-size: 13px; font-family: 'Inter', sans-serif;
+            outline: none; transition: border-color 0.15s;
+        }
+        .search-input:focus { border-color: var(--primary); }
+        .sidebar-title {
+            padding: 12px 16px 8px; font-size: 11px; font-weight: 600;
+            color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.05em;
+        }
+        .history-list { flex: 1; overflow-y: auto; padding: 0 8px 8px; }
+        .history-card {
+            padding: 12px 14px; border-radius: var(--radius); cursor: pointer;
+            transition: background 0.12s; margin-bottom: 4px; position: relative;
+        }
+        .history-card:hover { background: var(--primary-light); }
+        .history-card.active { background: var(--primary-light); border-left: 3px solid var(--primary); }
+        .history-card .hc-date { font-size: 11px; color: var(--text-tertiary); margin-bottom: 2px; }
+        .history-card .hc-seller { font-size: 13px; font-weight: 500; color: var(--text); margin-bottom: 2px; }
+        .history-card .hc-bottom { display: flex; justify-content: space-between; align-items: center; }
+        .history-card .hc-amount { font-size: 13px; font-weight: 600; color: var(--primary); }
+        .history-card .hc-num { font-size: 10px; color: var(--text-tertiary); }
+        .history-card .hc-delete {
+            position: absolute; top: 8px; right: 8px; width: 20px; height: 20px;
+            border-radius: 4px; display: none; align-items: center; justify-content: center;
+            color: var(--danger); cursor: pointer; font-size: 14px; background: rgba(255,255,255,0.8);
+        }
+        .history-card:hover .hc-delete { display: flex; }
+        .sidebar-footer { padding: 12px 16px; border-top: 1px solid var(--border); }
+        .load-more-btn {
+            width: 100%; padding: 8px; border: 1px solid var(--border);
+            border-radius: var(--radius); background: var(--surface); color: var(--text-secondary);
+            font-size: 12px; cursor: pointer; transition: background 0.15s;
+        }
+        .load-more-btn:hover { background: var(--bg); }
+        .empty-history { text-align: center; padding: 40px 16px; color: var(--text-tertiary); font-size: 13px; }
+
+        /* ==================== Main ==================== */
+        .main { flex: 1; padding: 24px; overflow-x: auto; }
+        .main-content { max-width: 1000px; margin: 0 auto; }
 
         /* ==================== Upload ==================== */
         .upload-card {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: var(--radius-lg);
-            padding: 32px;
-            margin-bottom: 24px;
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: var(--radius-lg); padding: 24px; margin-bottom: 20px;
             box-shadow: var(--shadow-sm);
         }
         .upload-zone {
-            border: 2px dashed var(--border);
-            border-radius: var(--radius-lg);
-            padding: 48px 24px;
-            text-align: center;
-            cursor: pointer;
-            transition: border-color 0.2s ease, background 0.2s ease;
-            background: var(--bg);
+            border: 2px dashed var(--border); border-radius: var(--radius-lg);
+            padding: 36px 20px; text-align: center; cursor: pointer;
+            transition: border-color 0.2s, background 0.2s; background: var(--bg);
         }
-        .upload-zone:hover,
-        .upload-zone:focus-visible,
-        .upload-zone.dragover {
-            border-color: var(--primary);
-            background: var(--primary-light);
-            outline: none;
+        .upload-zone:hover, .upload-zone:focus-visible, .upload-zone.dragover {
+            border-color: var(--primary); background: var(--primary-light); outline: none;
         }
         .upload-zone .icon {
-            width: 56px;
-            height: 56px;
-            margin: 0 auto 16px;
-            background: var(--primary-light);
-            border-radius: 14px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            width: 48px; height: 48px; margin: 0 auto 12px; background: var(--primary-light);
+            border-radius: 12px; display: flex; align-items: center; justify-content: center;
         }
-        .upload-zone .icon svg {
-            width: 28px;
-            height: 28px;
-            color: var(--primary);
-        }
-        .upload-zone h3 {
-            font-family: 'Poppins', 'Inter', sans-serif;
-            font-size: 16px;
-            font-weight: 600;
-            color: var(--text);
-            margin-bottom: 6px;
-        }
-        .upload-zone p {
-            font-size: 13px;
-            color: var(--text-secondary);
-        }
-        .upload-zone .formats {
-            margin-top: 16px;
-            font-size: 11px;
-            color: var(--text-tertiary);
-            font-weight: 400;
-        }
+        .upload-zone .icon svg { width: 24px; height: 24px; color: var(--primary); }
+        .upload-zone h3 { font-family: 'Poppins', sans-serif; font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+        .upload-zone p { font-size: 12px; color: var(--text-secondary); }
+        .upload-zone .formats { margin-top: 10px; font-size: 11px; color: var(--text-tertiary); }
 
         /* ==================== Progress ==================== */
-        .progress-section { margin-top: 20px; display: none; }
+        .progress-section { margin-top: 16px; display: none; }
         .progress-section.active { display: block; }
         .progress-item {
-            display: flex;
-            align-items: center;
-            padding: 12px 16px;
-            background: var(--bg);
-            border: 1px solid var(--border-light);
-            border-radius: var(--radius);
-            margin-bottom: 8px;
-            font-size: 13px;
+            display: flex; align-items: center; padding: 10px 14px; background: var(--bg);
+            border: 1px solid var(--border-light); border-radius: var(--radius);
+            margin-bottom: 6px; font-size: 13px;
         }
         .progress-item .spinner {
-            width: 16px; height: 16px;
-            border: 2px solid var(--border);
-            border-top-color: var(--primary);
-            border-radius: 50%;
-            animation: spin 0.7s linear infinite;
-            margin-right: 12px;
-            flex-shrink: 0;
+            width: 16px; height: 16px; border: 2px solid var(--border);
+            border-top-color: var(--primary); border-radius: 50%;
+            animation: spin 0.7s linear infinite; margin-right: 10px; flex-shrink: 0;
         }
-        .progress-item .check {
-            color: var(--success);
-            margin-right: 12px;
-            font-size: 16px;
-            flex-shrink: 0;
-        }
-        .progress-item .cross {
-            color: var(--danger);
-            margin-right: 12px;
-            font-size: 16px;
-            flex-shrink: 0;
-        }
-        .progress-item .warn {
-            color: var(--warning);
-            margin-right: 12px;
-            font-size: 16px;
-            flex-shrink: 0;
-        }
-        .progress-item.warning {
-            background: #FFFBEB;
-            border-color: #FDE68A;
-        }
-        .progress-item .info {
-            color: var(--text);
-            flex: 1;
-            font-weight: 500;
-        }
-        .progress-item .detail {
-            color: var(--text-secondary);
-            font-size: 12px;
-        }
+        .progress-item .check { color: var(--success); margin-right: 10px; font-size: 16px; flex-shrink: 0; }
+        .progress-item .cross { color: var(--danger); margin-right: 10px; font-size: 16px; flex-shrink: 0; }
+        .progress-item .warn { color: var(--warning); margin-right: 10px; font-size: 16px; flex-shrink: 0; }
+        .progress-item.warning { background: #FFFBEB; border-color: #FDE68A; }
+        .progress-item .info { color: var(--text); flex: 1; font-weight: 500; }
+        .progress-item .detail { color: var(--text-secondary); font-size: 12px; }
         @keyframes spin { to { transform: rotate(360deg); } }
 
         /* ==================== Stats ==================== */
-        .stats {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 16px;
-            margin-bottom: 24px;
-        }
-        .stat-card {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: var(--radius-lg);
-            padding: 24px;
-            box-shadow: var(--shadow-sm);
-        }
-        .stat-card .stat-label {
-            font-size: 12px;
-            font-weight: 500;
-            color: var(--text-secondary);
-            text-transform: uppercase;
-            letter-spacing: 0.04em;
-        }
-        .stat-card .stat-num {
-            font-family: 'Poppins', 'Inter', sans-serif;
-            font-size: 30px;
-            font-weight: 700;
-            color: var(--text);
-            margin-top: 8px;
-            letter-spacing: -0.02em;
-        }
+        .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px; }
+        .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px; box-shadow: var(--shadow-sm); }
+        .stat-card .stat-label { font-size: 11px; font-weight: 500; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.04em; }
+        .stat-card .stat-num { font-family: 'Poppins', sans-serif; font-size: 26px; font-weight: 700; margin-top: 4px; letter-spacing: -0.02em; }
         .stat-card .stat-num.accent { color: var(--primary); }
 
         /* ==================== Results ==================== */
-        .results-card {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: var(--radius-lg);
-            box-shadow: var(--shadow-sm);
-            overflow: hidden;
-            margin-bottom: 24px;
+        .results-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); overflow: hidden; margin-bottom: 20px; }
+        .results-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid var(--border); }
+        .results-header h2 { font-family: 'Poppins', sans-serif; font-size: 15px; font-weight: 600; }
+        .sort-group { display: flex; align-items: center; gap: 8px; }
+        .sort-group label { font-size: 12px; color: var(--text-secondary); font-weight: 500; }
+        .sort-select {
+            padding: 5px 26px 5px 10px; border: 1px solid var(--border); border-radius: var(--radius);
+            font-family: 'Inter', sans-serif; font-size: 12px; color: var(--text); background: var(--surface);
+            cursor: pointer; appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' viewBox='0 0 24 24' stroke='%236B7280' stroke-width='2'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19.5 8.25l-7.5 7.5-7.5-7.5'/%3E%3C/svg%3E");
+            background-repeat: no-repeat; background-position: right 7px center; min-height: 32px;
         }
-        .results-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 20px 24px;
-            border-bottom: 1px solid var(--border);
-        }
-        .results-header h2 {
-            font-family: 'Poppins', 'Inter', sans-serif;
-            font-size: 16px;
-            font-weight: 600;
-            color: var(--text);
-        }
-
+        .sort-select:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
         .table-wrap { overflow-x: auto; }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 13px;
-        }
+        table { width: 100%; border-collapse: collapse; font-size: 12px; }
         thead { background: var(--bg); }
-        th {
-            padding: 12px 10px;
-            text-align: center;
-            font-weight: 600;
-            font-size: 12px;
-            color: var(--text-secondary);
-            text-transform: uppercase;
-            letter-spacing: 0.03em;
-            border-bottom: 1px solid var(--border);
-            white-space: nowrap;
-            background: var(--bg);
-        }
-        td {
-            padding: 12px 10px;
-            text-align: center;
-            border-bottom: 1px solid var(--border-light);
-            color: var(--text);
-            font-weight: 400;
-        }
+        th { padding: 10px 8px; text-align: center; font-weight: 600; font-size: 11px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.03em; border-bottom: 1px solid var(--border); white-space: nowrap; }
+        td { padding: 10px 8px; text-align: center; border-bottom: 1px solid var(--border-light); }
         td.left { text-align: left; }
         tbody tr:hover { background: var(--primary-light); }
         tr.invoice-start { border-top: 2px solid var(--primary); }
         tr.invoice-start td { background: var(--primary-light); }
-        tr.invoice-start:hover td { background: #DBEAFE; }
 
         /* ==================== Buttons ==================== */
-        .btn {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            padding: 8px 16px;
-            border-radius: var(--radius);
-            font-family: 'Inter', sans-serif;
-            font-size: 13px;
-            font-weight: 500;
-            cursor: pointer;
-            border: 1px solid transparent;
-            transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
-            min-height: 36px;
-            text-decoration: none;
-        }
-        .btn:focus-visible {
-            outline: 2px solid var(--primary);
-            outline-offset: 2px;
-        }
-        .btn-primary {
-            background: var(--primary);
-            color: white;
-        }
-        .btn-primary:hover { background: var(--primary-hover); }
-        .btn-success {
-            background: var(--success);
-            color: white;
-        }
+        .btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: var(--radius); font-size: 13px; font-weight: 500; cursor: pointer; border: 1px solid transparent; transition: all 0.15s; min-height: 34px; text-decoration: none; }
+        .btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+        .btn-success { background: var(--success); color: white; }
         .btn-success:hover { background: var(--success-hover); }
-        .btn-danger {
-            background: var(--danger);
-            color: white;
-        }
+        .btn-danger { background: var(--danger); color: white; }
         .btn-danger:hover { background: var(--danger-hover); }
-        .btn-secondary {
-            background: var(--surface);
-            color: var(--text-secondary);
-            border: 1px solid var(--border);
-        }
-        .btn-secondary:hover {
-            background: var(--bg);
-            border-color: #D1D5DB;
-        }
-        .btn-lg {
-            padding: 12px 28px;
-            font-size: 14px;
-            min-height: 44px;
-        }
-        .btn-sm {
-            padding: 4px 10px;
-            font-size: 12px;
-            min-height: 28px;
-        }
-
-        /* ==================== Sort Selector ==================== */
-        .sort-group {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .sort-group label {
-            font-size: 12px;
-            color: var(--text-secondary);
-            font-weight: 500;
-        }
-        .sort-select {
-            padding: 6px 28px 6px 12px;
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            font-family: 'Inter', sans-serif;
-            font-size: 13px;
-            color: var(--text);
-            background: var(--surface);
-            cursor: pointer;
-            appearance: none;
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' viewBox='0 0 24 24' stroke='%236B7280' stroke-width='2'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19.5 8.25l-7.5 7.5-7.5-7.5'/%3E%3C/svg%3E");
-            background-repeat: no-repeat;
-            background-position: right 8px center;
-            transition: border-color 0.15s ease;
-            min-height: 36px;
-        }
-        .sort-select:hover { border-color: #D1D5DB; }
-        .sort-select:focus-visible {
-            outline: 2px solid var(--primary);
-            outline-offset: 1px;
-        }
-
-        /* ==================== Action Bar ==================== */
-        .action-bar {
-            display: flex;
-            gap: 12px;
-            justify-content: center;
-            padding: 24px;
-            border-top: 1px solid var(--border);
-            background: var(--bg);
-        }
+        .btn-secondary { background: var(--surface); color: var(--text-secondary); border: 1px solid var(--border); }
+        .btn-secondary:hover { background: var(--bg); border-color: #D1D5DB; }
+        .btn-lg { padding: 10px 24px; font-size: 13px; min-height: 40px; }
+        .btn-sm { padding: 4px 10px; font-size: 12px; min-height: 28px; }
+        .action-bar { display: flex; gap: 10px; justify-content: center; padding: 20px; border-top: 1px solid var(--border); background: var(--bg); }
 
         /* ==================== Responsive ==================== */
-        @media (max-width: 768px) {
-            .header { padding: 12px 16px; }
-            .container { padding: 16px; }
-            .upload-card { padding: 16px; }
+        @media (max-width: 900px) {
+            .sidebar { display: none; }
+            .header { padding: 10px 16px; }
+            .main { padding: 16px; }
             .stats { grid-template-columns: 1fr; }
-            .header-tag { display: none; }
         }
-
         @media (prefers-reduced-motion: reduce) {
-            *, *::before, *::after {
-                animation-duration: 0.01ms !important;
-                transition-duration: 0.01ms !important;
-            }
+            *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
         }
     </style>
 </head>
@@ -437,87 +225,98 @@
                 <p>上海辉驰包装设备有限公司 · 财务部</p>
             </div>
         </div>
-        <span class="header-tag">本地OCR · 数据不外传</span>
+        <div class="header-right">
+            <div class="user-info">
+                <div class="avatar">{{ username[:1]|upper }}</div>
+                <span>{{ username }}</span>
+            </div>
+            {% if is_admin %}
+            <a href="/admin/users" class="btn btn-secondary btn-sm">用户管理</a>
+            {% endif %}
+            <a href="/logout" class="btn btn-secondary btn-sm">退出</a>
+        </div>
     </header>
 
-    <div class="container">
-        <div class="upload-card">
-            <div class="upload-zone" id="uploadZone" tabindex="0" role="button" aria-label="上传发票文件">
-                <div class="icon">
+    <div class="layout">
+        <!-- ==================== Sidebar ==================== -->
+        <aside class="sidebar">
+            <div class="sidebar-search">
+                <div class="search-wrap">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
                     </svg>
-                </div>
-                <h3>拖拽发票文件到此处，或点击选择</h3>
-                <p>支持批量上传，系统自动识别发票内容并归类</p>
-                <div class="formats">支持格式：JPG / PNG / BMP / TIFF / PDF · 本地识别，数据不上传</div>
-            </div>
-            <input type="file" id="fileInput" multiple
-                   accept=".jpg,.jpeg,.png,.bmp,.tif,.tiff,.pdf" style="display:none">
-
-            <div class="progress-section" id="progressSection"></div>
-        </div>
-
-        <div class="stats" id="statsBar" style="display:none">
-            <div class="stat-card">
-                <div class="stat-label">发票数量</div>
-                <div class="stat-num" id="statInvoices">0</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">明细行数</div>
-                <div class="stat-num" id="statItems">0</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">价税合计</div>
-                <div class="stat-num accent" id="statAmount">¥0</div>
-            </div>
-        </div>
-
-        <div class="results-card" id="resultsCard" style="display:none">
-            <div class="results-header">
-                <h2>识别结果</h2>
-                <div class="sort-group">
-                    <label for="sortSelect">排序</label>
-                    <select class="sort-select" id="sortSelect" onchange="onSortChange()">
-                        <option value="date_desc">日期 ↓ 新到旧</option>
-                        <option value="date_asc">日期 ↑ 旧到新</option>
-                        <option value="amount_desc">金额 ↓ 高到低</option>
-                        <option value="amount_asc">金额 ↑ 低到高</option>
-                    </select>
-                    <button class="btn btn-secondary btn-sm" onclick="clearAll()">清空全部</button>
+                    <input type="text" class="search-input" id="historySearch"
+                           placeholder="搜索日期/供应商/票号/金额" oninput="onHistorySearch()">
                 </div>
             </div>
-            <div class="table-wrap">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>序号</th>
-                            <th>开票日期</th>
-                            <th>品名</th>
-                            <th>规格</th>
-                            <th>数量</th>
-                            <th>单价</th>
-                            <th>金额</th>
-                            <th>税率</th>
-                            <th>税额</th>
-                            <th>发票总金额</th>
-                            <th>票号</th>
-                            <th>供应商名称</th>
-                            <th>操作</th>
-                        </tr>
-                    </thead>
-                    <tbody id="resultsBody"></tbody>
-                </table>
+            <div class="sidebar-title">历史记录</div>
+            <div class="history-list" id="historyList">
+                <div class="empty-history">暂无历史记录</div>
             </div>
-            <div class="action-bar">
-                <button class="btn btn-success btn-lg" onclick="downloadExcel()">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
-                    </svg>
-                    下载 Excel
-                </button>
+            <div class="sidebar-footer">
+                <button class="load-more-btn" id="loadMoreBtn" style="display:none" onclick="loadMoreHistory()">加载更多</button>
             </div>
-        </div>
+        </aside>
+
+        <!-- ==================== Main ==================== -->
+        <main class="main">
+            <div class="main-content">
+                <div class="upload-card">
+                    <div class="upload-zone" id="uploadZone" tabindex="0" role="button" aria-label="上传发票文件">
+                        <div class="icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                            </svg>
+                        </div>
+                        <h3>拖拽发票文件到此处，或点击选择</h3>
+                        <p>支持批量上传，系统自动识别发票内容并归类</p>
+                        <div class="formats">JPG / PNG / BMP / TIFF / PDF · 本地识别，数据不上传</div>
+                    </div>
+                    <input type="file" id="fileInput" multiple accept=".jpg,.jpeg,.png,.bmp,.tif,.tiff,.pdf" style="display:none">
+                    <div class="progress-section" id="progressSection"></div>
+                </div>
+
+                <div class="stats" id="statsBar" style="display:none">
+                    <div class="stat-card"><div class="stat-label">发票数量</div><div class="stat-num" id="statInvoices">0</div></div>
+                    <div class="stat-card"><div class="stat-label">明细行数</div><div class="stat-num" id="statItems">0</div></div>
+                    <div class="stat-card"><div class="stat-label">价税合计</div><div class="stat-num accent" id="statAmount">¥0</div></div>
+                </div>
+
+                <div class="results-card" id="resultsCard" style="display:none">
+                    <div class="results-header">
+                        <h2 id="resultsTitle">识别结果</h2>
+                        <div class="sort-group">
+                            <label for="sortSelect">排序</label>
+                            <select class="sort-select" id="sortSelect" onchange="onSortChange()">
+                                <option value="date_desc">日期 ↓ 新到旧</option>
+                                <option value="date_asc">日期 ↑ 旧到新</option>
+                                <option value="amount_desc">金额 ↓ 高到低</option>
+                                <option value="amount_asc">金额 ↑ 低到高</option>
+                            </select>
+                            <button class="btn btn-secondary btn-sm" onclick="clearAll()">清空</button>
+                        </div>
+                    </div>
+                    <div class="table-wrap">
+                        <table>
+                            <thead><tr>
+                                <th>序号</th><th>开票日期</th><th>品名</th><th>规格</th>
+                                <th>数量</th><th>单价</th><th>金额</th><th>税率</th><th>税额</th>
+                                <th>发票总金额</th><th>票号</th><th>供应商名称</th><th>操作</th>
+                            </tr></thead>
+                            <tbody id="resultsBody"></tbody>
+                        </table>
+                    </div>
+                    <div class="action-bar">
+                        <button class="btn btn-success btn-lg" onclick="downloadExcel()">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                            </svg>
+                            下载 Excel
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </main>
     </div>
 
     <script>
@@ -528,164 +327,162 @@
         const statsBar = document.getElementById('statsBar');
         const sortSelect = document.getElementById('sortSelect');
         let currentSort = 'date_desc';
+        let historyOffset = 0;
+        let historyLimit = 50;
+        let searchTimer = null;
 
+        // ==================== Upload ====================
         uploadZone.addEventListener('click', () => fileInput.click());
         uploadZone.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                fileInput.click();
-            }
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); }
         });
-        uploadZone.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            uploadZone.classList.add('dragover');
-        });
-        uploadZone.addEventListener('dragleave', () => {
-            uploadZone.classList.remove('dragover');
-        });
-        uploadZone.addEventListener('drop', (e) => {
-            e.preventDefault();
-            uploadZone.classList.remove('dragover');
-            handleFiles(e.dataTransfer.files);
-        });
-        fileInput.addEventListener('change', (e) => {
-            handleFiles(e.target.files);
-            fileInput.value = '';
-        });
+        uploadZone.addEventListener('dragover', (e) => { e.preventDefault(); uploadZone.classList.add('dragover'); });
+        uploadZone.addEventListener('dragleave', () => { uploadZone.classList.remove('dragover'); });
+        uploadZone.addEventListener('drop', (e) => { e.preventDefault(); uploadZone.classList.remove('dragover'); handleFiles(e.dataTransfer.files); });
+        fileInput.addEventListener('change', (e) => { handleFiles(e.target.files); fileInput.value = ''; });
 
         async function handleFiles(files) {
             if (!files.length) return;
             progressSection.classList.add('active');
             progressSection.innerHTML = '';
 
-            for (let i = 0; i < files.length; i++) {
-                const file = files[i];
+            const CONCURRENCY = 3;
+            const fileArr = Array.from(files);
+            const items = fileArr.map((file, i) => {
                 const item = document.createElement('div');
                 item.className = 'progress-item';
-                item.innerHTML = `
-                    <div class="spinner"></div>
-                    <div class="info">[${i+1}/${files.length}] 识别中: ${file.name}</div>
-                `;
+                item.innerHTML = `<div class="spinner"></div><div class="info">[${i+1}/${fileArr.length}] 识别中: ${file.name}</div>`;
                 progressSection.appendChild(item);
+                return { file, item, index: i };
+            });
 
+            async function processOne({ file, item, index }) {
                 try {
                     const formData = new FormData();
                     formData.append('file', file);
                     const resp = await fetch('/upload', { method: 'POST', body: formData });
                     const data = await resp.json();
-
                     if (data.success) {
                         const inv = data.invoice;
-                        const retryTag = data.retry_count > 0
-                            ? ` | <span style="color:var(--warning);font-weight:500">重试${data.retry_count}次后成功</span>`
-                            : '';
-                        item.innerHTML = `
-                            <div class="check">&#10003;</div>
-                            <div class="info">${file.name}</div>
-                            <div class="detail">${inv.seller_name} | ${inv.invoice_num} | ${inv.item_count}条明细${retryTag}</div>
-                        `;
+                        const retryTag = data.retry_count > 0 ? ` | <span style="color:var(--warning)">重试${data.retry_count}次</span>` : '';
+                        item.innerHTML = `<div class="check">&#10003;</div><div class="info">${file.name}</div><div class="detail">${inv.seller_name} | ${inv.invoice_num} | ${inv.item_count}条${retryTag}</div>`;
                     } else if (data.duplicate) {
                         item.className = 'progress-item warning';
-                        item.innerHTML = `
-                            <div class="warn">&#9888;</div>
-                            <div class="info">${file.name}</div>
-                            <div class="detail">${data.warning}</div>
-                        `;
+                        item.innerHTML = `<div class="warn">&#9888;</div><div class="info">${file.name}</div><div class="detail">${data.warning}</div>`;
                     } else {
-                        item.innerHTML = `
-                            <div class="cross">&#10007;</div>
-                            <div class="info">${file.name}</div>
-                            <div class="detail">${data.error}</div>
-                        `;
+                        item.innerHTML = `<div class="cross">&#10007;</div><div class="info">${file.name}</div><div class="detail">${data.error}</div>`;
                     }
                 } catch (err) {
-                    item.innerHTML = `
-                        <div class="cross">&#10007;</div>
-                        <div class="info">${file.name}</div>
-                        <div class="detail">错误: ${err.message}</div>
-                    `;
+                    item.innerHTML = `<div class="cross">&#10007;</div><div class="info">${file.name}</div><div class="detail">错误: ${err.message}</div>`;
                 }
-                progressSection.lastChild.scrollIntoView({ behavior: 'smooth' });
             }
+
+            // 3路并发：每批最多3个文件同时处理
+            for (let i = 0; i < items.length; i += CONCURRENCY) {
+                const batch = items.slice(i, i + CONCURRENCY);
+                await Promise.all(batch.map(processOne));
+            }
+
             loadResults();
+            loadHistory(true);
         }
 
+        // ==================== Results ====================
         async function loadResults() {
             const resp = await fetch('/results?sort=' + currentSort);
             const data = await resp.json();
             renderResults(data.invoices);
         }
 
-        function onSortChange() {
-            currentSort = sortSelect.value;
-            loadResults();
-        }
+        function onSortChange() { currentSort = sortSelect.value; loadResults(); }
 
         function renderResults(invoices) {
             const tbody = document.getElementById('resultsBody');
-            if (!invoices.length) {
-                resultsCard.style.display = 'none';
-                statsBar.style.display = 'none';
-                return;
-            }
-            resultsCard.style.display = 'block';
-            statsBar.style.display = 'grid';
-
-            let totalItems = 0;
-            let totalAmount = 0;
-            invoices.forEach(inv => {
-                totalItems += inv.item_count;
-                const amt = parseFloat(inv.total_amount) || 0;
-                totalAmount += amt;
-            });
+            if (!invoices.length) { resultsCard.style.display = 'none'; statsBar.style.display = 'none'; return; }
+            resultsCard.style.display = 'block'; statsBar.style.display = 'grid';
+            let totalItems = 0, totalAmount = 0;
+            invoices.forEach(inv => { totalItems += inv.item_count; totalAmount += parseFloat(inv.total_amount) || 0; });
             document.getElementById('statInvoices').textContent = invoices.length;
             document.getElementById('statItems').textContent = totalItems;
             document.getElementById('statAmount').textContent = '¥' + totalAmount.toFixed(2);
-
             tbody.innerHTML = '';
             invoices.forEach((inv, idx) => {
                 inv.items.forEach((item, i) => {
                     const tr = document.createElement('tr');
                     if (i === 0) tr.className = 'invoice-start';
-                    tr.innerHTML = `
-                        <td>${i === 0 ? idx + 1 : ''}</td>
-                        <td>${i === 0 ? inv.date : ''}</td>
-                        <td class="left">${item.name || ''}</td>
-                        <td class="left">${item.spec || ''}</td>
-                        <td>${item.qty || ''}</td>
-                        <td>${item.price || ''}</td>
-                        <td>${item.amount || ''}</td>
-                        <td>${item.tax_rate || ''}</td>
-                        <td>${item.tax || ''}</td>
-                        <td>${i === 0 ? inv.total_amount : ''}</td>
-                        <td>${i === 0 ? 'NO.' + inv.invoice_num : ''}</td>
-                        <td class="left">${inv.seller_name || ''}</td>
-                        <td>${i === 0 ? `<button class="btn btn-danger btn-sm" onclick="deleteInvoice('${inv.id}')">删除</button>` : ''}</td>
-                    `;
+                    tr.innerHTML = `<td>${i===0?idx+1:''}</td><td>${i===0?inv.date:''}</td>
+                        <td class="left">${item.name||''}</td><td class="left">${item.spec||''}</td>
+                        <td>${item.qty||''}</td><td>${item.price||''}</td><td>${item.amount||''}</td>
+                        <td>${item.tax_rate||''}</td><td>${item.tax||''}</td>
+                        <td>${i===0?inv.total_amount:''}</td><td>${i===0?'NO.'+inv.invoice_num:''}</td>
+                        <td class="left">${inv.seller_name||''}</td>
+                        <td>${i===0?`<button class="btn btn-danger btn-sm" onclick="deleteInvoice('${inv.id}')">删除</button>`:''}</td>`;
                     tbody.appendChild(tr);
                 });
             });
         }
 
-        async function deleteInvoice(id) {
-            if (!confirm('确认删除该发票？')) return;
-            await fetch(`/delete/${id}`);
-            loadResults();
+        async function deleteInvoice(id) { if (!confirm('确认删除？')) return; await fetch(`/delete/${id}`); loadResults(); loadHistory(true); }
+        async function clearAll() { if (!confirm('确认清空？')) return; await fetch('/clear'); progressSection.innerHTML=''; progressSection.classList.remove('active'); loadResults(); }
+        function downloadExcel() { window.location.href = '/download?sort=' + currentSort; }
+
+        // ==================== History Sidebar ====================
+        async function loadHistory(reset = false) {
+            if (reset) { historyOffset = 0; }
+            const q = document.getElementById('historySearch').value.trim();
+            const resp = await fetch(`/api/history?q=${encodeURIComponent(q)}&limit=${historyLimit}&offset=${historyOffset}`);
+            const data = await resp.json();
+            const list = document.getElementById('historyList');
+            if (reset) list.innerHTML = '';
+            if (!data.history.length && historyOffset === 0) {
+                list.innerHTML = '<div class="empty-history">暂无历史记录</div>';
+                document.getElementById('loadMoreBtn').style.display = 'none';
+                return;
+            }
+            data.history.forEach(h => {
+                const card = document.createElement('div');
+                card.className = 'history-card';
+                card.onclick = (e) => { if (e.target.classList.contains('hc-delete')) return; loadHistoryDetail(h.id); };
+                card.innerHTML = `
+                    <div class="hc-date">${h.date || '未知日期'}</div>
+                    <div class="hc-seller">${h.seller_name || '未知供应商'}</div>
+                    <div class="hc-bottom">
+                        <span class="hc-amount">¥${h.total_amount || '0'}</span>
+                        <span class="hc-num">${h.invoice_num ? h.invoice_num.slice(-6) : ''}</span>
+                    </div>
+                    <div class="hc-delete" onclick="deleteHistory('${h.id}', event)">×</div>`;
+                list.appendChild(card);
+            });
+            historyOffset += data.history.length;
+            document.getElementById('loadMoreBtn').style.display = data.history.length >= historyLimit ? 'block' : 'none';
         }
 
-        async function clearAll() {
-            if (!confirm('确认清空所有识别结果？')) return;
-            await fetch('/clear');
-            progressSection.innerHTML = '';
-            progressSection.classList.remove('active');
-            loadResults();
+        function onHistorySearch() {
+            clearTimeout(searchTimer);
+            searchTimer = setTimeout(() => loadHistory(true), 300);
         }
 
-        function downloadExcel() {
-            window.location.href = '/download?sort=' + currentSort;
+        async function loadHistoryDetail(hid) {
+            const resp = await fetch(`/api/history/${hid}`);
+            const data = await resp.json();
+            if (data.invoice) {
+                document.getElementById('resultsTitle').textContent = '历史记录详情';
+                renderResults([data.invoice]);
+            }
         }
 
+        async function deleteHistory(hid, e) {
+            e.stopPropagation();
+            if (!confirm('确认删除此历史记录？')) return;
+            await fetch(`/api/history/${hid}`, { method: 'DELETE' });
+            loadHistory(true);
+        }
+
+        function loadMoreHistory() { loadHistory(false); }
+
+        // ==================== Init ====================
         loadResults();
+        loadHistory(true);
     </script>
 </body>
 </html>

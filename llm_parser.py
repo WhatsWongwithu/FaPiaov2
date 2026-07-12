@@ -4,6 +4,7 @@ LLM解析器 - 使用DeepSeek API解析OCR识别的文字
 """
 
 import json
+import re
 import requests
 
 DEEPSEEK_API_URL = "https://api.deepseek.com/chat/completions"
@@ -16,16 +17,18 @@ X坐标可以帮助你判断文字属于表格的哪一列：X越小越靠左（
 请提取发票中的所有信息，以JSON格式返回。
 
 提取规则：
-1. 品名：去掉星号标记，保留分类和名称。如"*齿轮*减速机"提取为"齿轮减速机"
+1. 品名：去掉星号标记，保留分类和名称。如"*齿轮*减速机"提取为"齿轮减速机"。注意：型号编号（如DP-101、MHMF092L1V2M、5GU30KB等字母+数字组合）不属于品名，必须放入规格型号字段
 2. 数量：纯数字。如果数量未识别到，留空""，绝对不要默认为1或任何猜测值。系统后处理会用 金额÷单价 自动计算
 3. 单价：保留原始精度
 4. 金额：该行的小计金额
 5. 税率：如"13%"
 6. 税额：该行的税额
-7. 合计金额：表格底部"合计"行的金额（不是价税合计）
-8. 合计税额：表格底部"合计"行的税额
-9. 发票总金额：价税合计（小写）金额
-10. 如果某个字段无法识别，留空字符串""
+7. 规格型号：型号编号（如"DP-101"、"5GU30KB"）。OCR可能把型号和品名读在一起，必须将型号拆分到spec字段，品名中不应包含型号
+8. 合计金额：表格底部"合计"行的金额（不是价税合计）
+9. 合计税额：表格底部"合计"行的税额
+10. 发票总金额：价税合计（小写）金额
+11. 如果某个字段无法识别，留空字符串""
+12. 品名和规格型号都不能为空。如果OCR把品名和型号读在一起，请拆开：中文部分放品名，字母数字部分放规格型号
 
 关键规则——数量与单价的处理：
 OCR常把"数量"和"单价"合并成一个数字（因为两列靠得很近）。例如数量"2"和单价"30"被OCR读成"230"。
@@ -162,6 +165,7 @@ def _try_split_merged(merged_str, amount, tolerance=0.005):
     尝试将合并的"数量+单价"字符串拆分为 (数量, 单价)
     使得 数量 × 单价 ≈ 金额
     例: "2261.0619469026549", amount=522.12 → ("2", "261.0619469026549")
+    也处理OCR丢失小数点的情况: "2331858407079650", amount=6637.17 → ("2", "3318.58407079650")
     """
     s = str(merged_str).strip().replace(",", "").replace(" ", "").replace("￥", "").replace("¥", "")
     if not s:
@@ -170,7 +174,7 @@ def _try_split_merged(merged_str, amount, tolerance=0.005):
     if amount_f is None or amount_f <= 0:
         return None
 
-    # qty 通常是 1-2 位整数，从左到右尝试每个拆分点
+    # 第一轮：直接拆分（小数点没丢的情况）
     for i in range(1, min(len(s), 10)):
         left = s[:i]
         right = s[i:]
@@ -181,13 +185,38 @@ def _try_split_merged(merged_str, amount, tolerance=0.005):
             continue
         if qty <= 0 or price <= 0:
             continue
-        # 数量通常是整数或≤2位小数，拒绝把长小数当数量(如823.0088不是数量)
-        if _count_decimals(left) > 2:
+        if _count_decimals(left) > 0:
             continue
         product = qty * price
         if abs(product - amount_f) <= max(amount_f * tolerance, 0.5):
             qty_str = str(int(qty)) if qty == int(qty) else left
             return (qty_str, right)
+
+    # 第二轮：拆分 + 在price部分插入小数点（OCR丢失小数点的情况）
+    for i in range(1, min(len(s), 10)):
+        left = s[:i]
+        right = s[i:]
+        try:
+            qty = float(left)
+        except ValueError:
+            continue
+        if qty <= 0 or _count_decimals(left) > 0:
+            continue
+        if len(right) < 4:
+            continue
+        for d in range(1, len(right)):
+            price_str = right[:d] + "." + right[d:]
+            try:
+                price = float(price_str)
+            except ValueError:
+                continue
+            if price <= 0:
+                continue
+            product = qty * price
+            if abs(product - amount_f) <= max(amount_f * tolerance, 0.5):
+                qty_str = str(int(qty)) if qty == int(qty) else left
+                return (qty_str, price_str)
+
     return None
 
 
@@ -210,8 +239,40 @@ def _validate_and_fix_items(items):
     2. 数量完全丢失 (单价正确，qty为空)
     3. LLM错误拆分合并值 (如把"1769.91"拆成qty=176, price=9.91)
     4. qty和price被交换 (qty有多位小数, price是整数)
+    5. 品名中混入型号，规格为空 → 从品名提取型号到规格
     """
     for item in items:
+        # ---- 去除规格末尾的单位（个/台/批等）----
+        spec_val = item.get("spec", "").strip()
+        UNITS = "个台批只根米盒箱卷张对副包瓶袋升吨"
+        changed = True
+        while changed and len(spec_val) > 2:
+            changed = False
+            for u in ("千克", "公斤"):
+                if spec_val.endswith(u) and len(spec_val) > len(u) + 1:
+                    spec_val = spec_val[:-len(u)].strip()
+                    changed = True
+                    break
+            if not changed and spec_val[-1] in UNITS and len(spec_val) > 2:
+                spec_val = spec_val[:-1].strip()
+                changed = True
+        if spec_val != item.get("spec", "").strip():
+            item["spec"] = spec_val
+
+        # ---- 品名/规格拆分 ----
+        name = item.get("name", "").strip()
+        spec = item.get("spec", "").strip()
+        if not spec and name:
+            # 规格为空，尝试从品名中提取型号
+            # 型号特征：连续的字母+数字+连字符组合，如 DP-101, MHMF092L1V2M, 5GU30KB
+            match = re.search(r'[A-Z0-9][-A-Z0-9+]{2,}', name)
+            if match:
+                extracted_spec = match.group()
+                name_clean = (name[:match.start()] + name[match.end():]).strip()
+                if name_clean and len(name_clean) >= 2:
+                    item["name"] = name_clean
+                    item["spec"] = extracted_spec
+
         qty_raw = item.get("qty", "")
         price_raw = item.get("price", "")
         amount_raw = item.get("amount", "")
@@ -294,6 +355,78 @@ def _validate_and_fix_items(items):
                 fixed = True
             # else: 计算出的qty非整数，说明price可能错误，留空不填
 
+        # 最终安全检查：单价超过100万几乎肯定是OCR垃圾值
+        price_final = _parse_number(item.get("price", ""))
+        if price_final is not None and price_final > 1000000:
+            qty_final = _parse_number(item.get("qty", ""))
+            if qty_final and qty_final > 0 and amount_f:
+                item["price"] = str(round(amount_f / qty_final, 6))
+            else:
+                item["price"] = ""
+
+    # 策略5: 跨行重新对齐
+    # OCR可能导致价格被分配到错误的行（行错位）
+    # 如果某行的price无法匹配自己的amount，尝试匹配其他行的amount并交换price
+    for i, item in enumerate(items):
+        price_i = item.get("price", "").strip()
+        if not price_i:
+            continue
+        price_f_i = _parse_number(price_i)
+        amount_i = item.get("amount", "").strip()
+        amount_f_i = _parse_number(amount_i)
+        # 如果qty×price≈amount，说明已经匹配，跳过
+        qty_f_i = _parse_number(item.get("qty", ""))
+        if qty_f_i and price_f_i and amount_f_i:
+            if abs(qty_f_i * price_f_i - amount_f_i) <= max(amount_f_i * 0.005, 0.5):
+                continue
+        # 如果price能拆分匹配自己的amount，也跳过
+        if amount_f_i and _try_split_merged(price_i, amount_f_i):
+            continue
+        # 尝试匹配其他行的amount
+        for j in range(len(items)):
+            if j == i:
+                continue
+            amount_j = items[j].get("amount", "").strip()
+            amount_f_j = _parse_number(amount_j)
+            if not amount_f_j:
+                continue
+            # 方式1: 拆分匹配（price是合并值）
+            result = _try_split_merged(price_i, amount_f_j)
+            if result:
+                price_j = items[j].get("price", "").strip()
+                items[j]["qty"] = result[0]
+                items[j]["price"] = result[1]
+                item["price"] = price_j
+                if price_j and amount_f_i:
+                    result2 = _try_split_merged(price_j, amount_f_i)
+                    if result2:
+                        item["qty"] = result2[0]
+                        item["price"] = result2[1]
+                break
+            # 方式2: 整除匹配（price是完整值，只是配错了行）
+            if price_f_i and price_f_i > 0:
+                calc_qty = amount_f_j / price_f_i
+                if abs(calc_qty - round(calc_qty)) < 0.02 and round(calc_qty) > 0:
+                    price_j = items[j].get("price", "").strip()
+                    items[j]["qty"] = str(int(round(calc_qty)))
+                    items[j]["price"] = price_i
+                    item["price"] = price_j
+                    # 用交换来的price验证当前行
+                    if price_j and amount_f_i:
+                        price_j_f = _parse_number(price_j)
+                        if price_j_f and price_j_f > 0:
+                            calc_qty2 = amount_f_i / price_j_f
+                            if abs(calc_qty2 - round(calc_qty2)) < 0.02 and round(calc_qty2) > 0:
+                                item["qty"] = str(int(round(calc_qty2)))
+                    break
+
+    # 最终预检查：清除跨行对齐可能引入的非整数数量
+    for item in items:
+        qty_f = _parse_number(item.get("qty", ""))
+        if qty_f is not None:
+            if qty_f < 0.5 or abs(qty_f - round(qty_f)) > 0.02:
+                item["qty"] = ""
+
     return items
 
 
@@ -316,6 +449,7 @@ def parse_with_deepseek(ocr_results, api_key):
         ],
         "response_format": {"type": "json_object"},
         "temperature": 0.1,
+        "max_tokens": 4000,
     }
 
     resp = requests.post(

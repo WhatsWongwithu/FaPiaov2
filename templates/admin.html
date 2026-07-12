@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>用户管理 · 发票识别系统</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Poppins:wght@500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #3B82F6; --primary-hover: #2563EB;
+            --primary-light: #EFF6FF; --primary-border: #BFDBFE;
+            --success: #16A34A; --success-hover: #15803D;
+            --warning: #D97706; --danger: #DC2626; --danger-hover: #B91C1C;
+            --surface: #FFFFFF; --text: #111827; --text-secondary: #6B7280;
+            --text-tertiary: #9CA3AF; --border: #E5E7EB; --border-light: #F3F4F6;
+            --bg: #F9FAFB;
+            --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+            --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
+            --radius: 8px; --radius-lg: 12px;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            background: var(--bg); color: var(--text); min-height: 100vh;
+            -webkit-font-smoothing: antialiased;
+        }
+        .header {
+            background: var(--surface); border-bottom: 1px solid var(--border);
+            padding: 16px 40px; display: flex; align-items: center;
+            justify-content: space-between; box-shadow: var(--shadow-sm);
+        }
+        .header-left { display: flex; align-items: center; gap: 12px; }
+        .header-logo {
+            width: 36px; height: 36px; background: var(--primary);
+            border-radius: var(--radius); display: flex; align-items: center;
+            justify-content: center; color: white; font-weight: 700;
+            font-size: 16px; font-family: 'Poppins', sans-serif;
+        }
+        .header h1 {
+            font-family: 'Poppins', sans-serif; font-size: 18px;
+            font-weight: 600; color: var(--text);
+        }
+        .header p { font-size: 12px; color: var(--text-secondary); }
+        .container { max-width: 900px; margin: 32px auto; padding: 0 24px; }
+        .card {
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: var(--radius-lg); box-shadow: var(--shadow-sm);
+            overflow: hidden; margin-bottom: 24px;
+        }
+        .card-header {
+            padding: 20px 24px; border-bottom: 1px solid var(--border);
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .card-header h2 {
+            font-family: 'Poppins', sans-serif; font-size: 16px; font-weight: 600;
+        }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        thead { background: var(--bg); }
+        th {
+            padding: 12px 16px; text-align: left; font-weight: 600;
+            font-size: 12px; color: var(--text-secondary);
+            text-transform: uppercase; letter-spacing: 0.03em;
+            border-bottom: 1px solid var(--border);
+        }
+        td { padding: 14px 16px; border-bottom: 1px solid var(--border-light); }
+        tbody tr:hover { background: var(--primary-light); }
+        .badge {
+            display: inline-block; padding: 3px 10px; border-radius: 20px;
+            font-size: 11px; font-weight: 500;
+        }
+        .badge-pending { background: #FEF3C7; color: var(--warning); }
+        .badge-active { background: #D1FAE5; color: var(--success); }
+        .badge-admin { background: var(--primary-light); color: var(--primary); margin-left: 6px; }
+        .btn {
+            display: inline-flex; align-items: center; gap: 4px;
+            padding: 5px 12px; border-radius: var(--radius); font-size: 12px;
+            font-weight: 500; cursor: pointer; border: 1px solid transparent;
+            transition: all 0.15s; min-height: 30px;
+        }
+        .btn-success { background: var(--success); color: white; }
+        .btn-success:hover { background: var(--success-hover); }
+        .btn-danger { background: var(--danger); color: white; }
+        .btn-danger:hover { background: var(--danger-hover); }
+        .btn-secondary { background: var(--surface); color: var(--text-secondary); border: 1px solid var(--border); }
+        .btn-secondary:hover { background: var(--bg); }
+        .btn-link { background: transparent; color: var(--primary); padding: 5px 8px; }
+        .btn-link:hover { text-decoration: underline; }
+        .actions { display: flex; gap: 6px; }
+        .add-form {
+            display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+        }
+        .form-input {
+            padding: 8px 12px; border: 1px solid var(--border);
+            border-radius: var(--radius); font-size: 13px; font-family: 'Inter', sans-serif;
+            outline: none; transition: border-color 0.15s;
+        }
+        .form-input:focus { border-color: var(--primary); }
+        .checkbox-label { font-size: 13px; color: var(--text-secondary); display: flex; align-items: center; gap: 4px; }
+        .alert {
+            padding: 12px 16px; border-radius: var(--radius); font-size: 13px;
+            margin-bottom: 16px; display: none;
+        }
+        .alert.show { display: block; }
+        .alert.error { background: #FEF2F2; color: var(--danger); border: 1px solid #FECACA; }
+        .alert.success { background: #F0FDF4; color: var(--success); border: 1px solid #BBF7D0; }
+        .modal-overlay {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.4); z-index: 1000; align-items: center; justify-content: center;
+        }
+        .modal-overlay.show { display: flex; }
+        .modal {
+            background: var(--surface); border-radius: var(--radius-lg);
+            padding: 32px; width: 360px; box-shadow: var(--shadow);
+        }
+        .modal h3 { font-size: 16px; font-weight: 600; margin-bottom: 16px; }
+        .modal .form-input { width: 100%; margin-bottom: 16px; }
+        .modal .btn { width: 100%; }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="header-left">
+            <div class="header-logo">辉</div>
+            <div>
+                <h1>用户管理</h1>
+                <p>上海辉驰包装设备有限公司 · 财务部</p>
+            </div>
+        </div>
+        <a href="/" class="btn btn-secondary">← 返回主页</a>
+    </header>
+
+    <div class="container">
+        <div id="alertBox" class="alert"></div>
+
+        <div class="card">
+            <div class="card-header">
+                <h2>用户列表</h2>
+            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>用户名</th>
+                        <th>角色</th>
+                        <th>状态</th>
+                        <th>注册时间</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="usersBody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="pwdModal">
+        <div class="modal">
+            <h3>重置密码</h3>
+            <input type="password" class="form-input" id="newPwd" placeholder="新密码（至少4位）">
+            <button class="btn btn-primary" style="background:var(--primary);color:white" onclick="confirmResetPwd()">确认重置</button>
+            <input type="hidden" id="pwdUid">
+        </div>
+    </div>
+
+    <script>
+        let currentAdmin = '';
+
+        async function loadUsers() {
+            const resp = await fetch('/api/users');
+            const data = await resp.json();
+            const tbody = document.getElementById('usersBody');
+            tbody.innerHTML = '';
+
+            data.users.forEach(u => {
+                const tr = document.createElement('tr');
+                const status = u.status === 'active'
+                    ? '<span class="badge badge-active">已激活</span>'
+                    : '<span class="badge badge-pending">待审批</span>';
+                const role = u.is_admin ? '管理员<span class="badge badge-admin">Admin</span>' : '普通用户';
+                const time = u.created_at ? u.created_at.slice(0, 10) : '';
+
+                let actions = '';
+                if (u.status === 'pending') {
+                    actions = `<div class="actions">
+                        <button class="btn btn-success" onclick="approve(${u.id})">通过</button>
+                        <button class="btn btn-danger" onclick="reject(${u.id})">拒绝</button>
+                    </div>`;
+                } else {
+                    actions = `<div class="actions">
+                        <button class="btn btn-link" onclick="openPwdModal(${u.id})">改密码</button>
+                        <button class="btn btn-danger" onclick="reject(${u.id})">删除</button>
+                    </div>`;
+                }
+
+                tr.innerHTML = `<td>${u.username}</td><td>${role}</td><td>${status}</td><td>${time}</td><td>${actions}</td>`;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function showAlert(type, msg) {
+            const box = document.getElementById('alertBox');
+            box.className = 'alert show ' + type;
+            box.textContent = msg;
+            setTimeout(() => { box.className = 'alert'; }, 3000);
+        }
+
+        async function approve(uid) {
+            const resp = await fetch(`/api/users/${uid}/approve`, { method: 'POST' });
+            if (resp.ok) { showAlert('success', '已通过审批'); loadUsers(); }
+        }
+
+        async function reject(uid) {
+            if (!confirm('确认删除该用户？')) return;
+            const resp = await fetch(`/api/users/${uid}/reject`, { method: 'POST' });
+            const data = await resp.json();
+            if (data.success) { showAlert('success', '已删除'); loadUsers(); }
+            else { showAlert('error', data.error); }
+        }
+
+        function openPwdModal(uid) {
+            document.getElementById('pwdUid').value = uid;
+            document.getElementById('newPwd').value = '';
+            document.getElementById('pwdModal').classList.add('show');
+        }
+
+        async function confirmResetPwd() {
+            const uid = document.getElementById('pwdUid').value;
+            const pwd = document.getElementById('newPwd').value;
+            if (pwd.length < 4) { showAlert('error', '密码至少4位'); return; }
+            const resp = await fetch(`/api/users/${uid}/password`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password: pwd }),
+            });
+            if (resp.ok) {
+                document.getElementById('pwdModal').classList.remove('show');
+                showAlert('success', '密码已重置');
+            }
+        }
+
+        document.getElementById('pwdModal').addEventListener('click', function(e) {
+            if (e.target === this) this.classList.remove('show');
+        });
+
+        loadUsers();
+    </script>
+</body>
+</html>
