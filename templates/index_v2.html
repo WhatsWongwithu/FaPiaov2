@@ -9,15 +9,16 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Poppins:wght@500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --primary: #3B82F6; --primary-hover: #2563EB;
+            --primary: #2563EB; --primary-hover: #1D4ED8;
             --primary-light: #EFF6FF; --primary-border: #BFDBFE;
             --secondary: #8B5CF6; --success: #16A34A; --success-hover: #15803D;
             --warning: #D97706; --danger: #DC2626; --danger-hover: #B91C1C;
             --surface: #FFFFFF; --text: #111827; --text-secondary: #6B7280;
             --text-tertiary: #9CA3AF; --border: #E5E7EB; --border-light: #F3F4F6;
-            --bg: #F9FAFB;
-            --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
-            --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
+            --bg: #F8FAFC;
+            --shadow-sm: 0 1px 2px rgba(37,99,235,0.04);
+            --shadow: 0 1px 3px rgba(37,99,235,0.06), 0 1px 2px rgba(37,99,235,0.04);
+            --shadow-lg: 0 4px 16px rgba(37,99,235,0.08), 0 2px 6px rgba(37,99,235,0.04);
             --radius: 8px; --radius-lg: 12px;
             --sidebar-w: 300px;
         }
@@ -25,7 +26,7 @@
         body {
             font-family: 'Inter', -apple-system, sans-serif;
             background: var(--bg); color: var(--text); min-height: 100vh;
-            -webkit-font-smoothing: antialiased;
+            -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
         }
 
         /* ==================== Header ==================== */
@@ -66,6 +67,7 @@
         .sidebar {
             width: var(--sidebar-w); flex-shrink: 0; background: var(--surface);
             border-right: 1px solid var(--border); display: flex; flex-direction: column;
+            position: sticky; top: 61px; height: calc(100vh - 61px); overflow: hidden;
         }
         .sidebar-search {
             padding: 16px; border-bottom: 1px solid var(--border);
@@ -103,6 +105,18 @@
             color: var(--danger); cursor: pointer; font-size: 14px; background: rgba(255,255,255,0.8);
         }
         .history-card:hover .hc-delete { display: flex; }
+        .history-card .hc-checkbox {
+            position: absolute; top: 8px; left: 8px; width: 16px; height: 16px;
+            cursor: pointer; opacity: 0; transition: opacity 0.15s;
+        }
+        .history-card:hover .hc-checkbox { opacity: 1; }
+        .history-card.selected { background: var(--primary-light); border-left: 3px solid var(--primary); }
+        .history-card.selected .hc-checkbox { opacity: 1; }
+        .history-card .hc-checkbox.checked { opacity: 1; }
+        .sidebar-actions {
+            display: flex; gap: 6px; padding: 8px 16px; border-top: 1px solid var(--border);
+        }
+        .sidebar-actions .btn { flex: 1; font-size: 12px; }
         .sidebar-footer { padding: 12px 16px; border-top: 1px solid var(--border); }
         .load-more-btn {
             width: 100%; padding: 8px; border: 1px solid var(--border);
@@ -110,7 +124,13 @@
             font-size: 12px; cursor: pointer; transition: background 0.15s;
         }
         .load-more-btn:hover { background: var(--bg); }
-        .empty-history { text-align: center; padding: 40px 16px; color: var(--text-tertiary); font-size: 13px; }
+        .empty-history {
+            text-align: center; padding: 40px 16px; color: var(--text-tertiary);
+            font-size: 13px; line-height: 1.6;
+        }
+        .empty-history svg {
+            width: 32px; height: 32px; margin: 0 auto 12px; opacity: 0.4;
+        }
 
         /* ==================== Main ==================== */
         .main { flex: 1; padding: 24px; overflow-x: auto; }
@@ -182,7 +202,7 @@
         }
         .sort-select:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
         .table-wrap { overflow-x: auto; }
-        table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        table { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
         thead { background: var(--bg); }
         th { padding: 10px 8px; text-align: center; font-weight: 600; font-size: 11px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.03em; border-bottom: 1px solid var(--border); white-space: nowrap; }
         td { padding: 10px 8px; text-align: center; border-bottom: 1px solid var(--border-light); }
@@ -194,6 +214,7 @@
         /* ==================== Buttons ==================== */
         .btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: var(--radius); font-size: 13px; font-weight: 500; cursor: pointer; border: 1px solid transparent; transition: all 0.15s; min-height: 34px; text-decoration: none; }
         .btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+        .btn:active { transform: scale(0.98); }
         .btn-success { background: var(--success); color: white; }
         .btn-success:hover { background: var(--success-hover); }
         .btn-danger { background: var(--danger); color: white; }
@@ -214,9 +235,31 @@
         @media (prefers-reduced-motion: reduce) {
             *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
         }
+
+        /* ==================== Toast ==================== */
+        .toast-container {
+            position: fixed; bottom: 24px; right: 24px; z-index: 9999;
+            display: flex; flex-direction: column; gap: 8px;
+        }
+        .toast {
+            background: var(--surface); border: 1px solid var(--border);
+            border-radius: var(--radius); box-shadow: var(--shadow-lg);
+            padding: 12px 20px; font-size: 13px; font-weight: 500;
+            color: var(--text); min-width: 280px; max-width: 400px;
+            display: flex; align-items: center; gap: 10px;
+            animation: toastIn 0.3s ease;
+        }
+        .toast.success { border-left: 3px solid var(--success); }
+        .toast.warning { border-left: 3px solid var(--warning); }
+        .toast.error { border-left: 3px solid var(--danger); }
+        .toast.info { border-left: 3px solid var(--primary); }
+        .toast.fade-out { animation: toastOut 0.3s ease forwards; }
+        @keyframes toastIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes toastOut { to { opacity: 0; transform: translateY(20px); } }
     </style>
 </head>
 <body>
+    <div class="toast-container" id="toastContainer"></div>
     <header class="header">
         <div class="header-left">
             <div class="header-logo">辉</div>
@@ -244,15 +287,25 @@
                         <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
                     </svg>
                     <input type="text" class="search-input" id="historySearch"
-                           placeholder="搜索日期/供应商/票号/金额" oninput="onHistorySearch()">
+                           placeholder="搜索日期/票号/供应商" oninput="onHistorySearch()">
                 </div>
             </div>
             <div class="sidebar-title">历史记录</div>
             <div class="history-list" id="historyList">
-                <div class="empty-history">暂无历史记录</div>
+                <div class="empty-history">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    <div>暂无历史记录</div>
+                    <div style="font-size:11px;margin-top:4px">上传发票后将显示在这里</div>
+                </div>
             </div>
             <div class="sidebar-footer">
                 <button class="load-more-btn" id="loadMoreBtn" style="display:none" onclick="loadMoreHistory()">加载更多</button>
+            </div>
+            <div class="sidebar-actions">
+                <button class="btn btn-secondary btn-sm" id="selectAllBtn" onclick="toggleSelectAll()">全选</button>
+                <button class="btn btn-success btn-sm" id="downloadSelectedBtn" onclick="downloadSelectedHistory()">下载选中</button>
             </div>
         </aside>
 
@@ -291,7 +344,7 @@
                                 <option value="amount_desc">金额 ↓ 高到低</option>
                                 <option value="amount_asc">金额 ↑ 低到高</option>
                             </select>
-                            <button class="btn btn-secondary btn-sm" onclick="clearAll()">清空</button>
+                            <button class="btn btn-secondary btn-sm" onclick="clearAll()">新建批次</button>
                         </div>
                     </div>
                     <div class="table-wrap">
@@ -326,7 +379,7 @@
         const sortSelect = document.getElementById('sortSelect');
         let currentSort = 'date_desc';
         let historyOffset = 0;
-        let historyLimit = 50;
+        let historyLimit = 20;
         let searchTimer = null;
 
         // ==================== Upload ====================
@@ -421,7 +474,7 @@
         }
 
         async function deleteInvoice(id) { if (!confirm('确认删除？')) return; await fetch(`/delete/${id}`); loadResults(); loadHistory(true); }
-        async function clearAll() { if (!confirm('确认清空？')) return; await fetch('/clear'); progressSection.innerHTML=''; progressSection.classList.remove('active'); loadResults(); }
+        async function clearAll() { if (!confirm('确认新建批次？\n当前列表将清空，历史记录保留。')) return; await fetch('/clear'); progressSection.innerHTML=''; progressSection.classList.remove('active'); loadResults(); showToast('已清空当前列表，可开始上传新一批发票', 'success'); }
         function downloadExcel() { window.location.href = '/download?sort=' + currentSort; }
 
         // ==================== History Sidebar ====================
@@ -440,8 +493,17 @@
             data.history.forEach(h => {
                 const card = document.createElement('div');
                 card.className = 'history-card';
-                card.onclick = (e) => { if (e.target.classList.contains('hc-delete')) return; loadHistoryDetail(h.id); };
+                card.dataset.id = h.id;
+                if (selectedHistoryIds.has(h.id)) card.classList.add('selected');
+                card.onclick = (e) => {
+                    if (e.target.classList.contains('hc-delete')) return;
+                    if (e.target.classList.contains('hc-checkbox')) return;
+                    loadHistoryDetail(h.id);
+                };
+                const checked = selectedHistoryIds.has(h.id) ? 'checked' : '';
                 card.innerHTML = `
+                    <input type="checkbox" class="hc-checkbox ${checked}" ${checked}
+                           onclick="toggleHistorySelect('${h.id}', event)">
                     <div class="hc-date">${h.date || '未知日期'}</div>
                     <div class="hc-seller">${h.seller_name || '未知供应商'}</div>
                     <div class="hc-bottom">
@@ -478,7 +540,91 @@
 
         function loadMoreHistory() { loadHistory(false); }
 
+        // ==================== History Multi-Select ====================
+        let selectedHistoryIds = new Set();
+
+        function toggleHistorySelect(id, e) {
+            e.stopPropagation();
+            const card = document.querySelector(`.history-card[data-id="${id}"]`);
+            const checkbox = card.querySelector('.hc-checkbox');
+            if (selectedHistoryIds.has(id)) {
+                selectedHistoryIds.delete(id);
+                card.classList.remove('selected');
+                checkbox.classList.remove('checked');
+                checkbox.checked = false;
+            } else {
+                selectedHistoryIds.add(id);
+                card.classList.add('selected');
+                checkbox.classList.add('checked');
+                checkbox.checked = true;
+            }
+        }
+
+        function toggleSelectAll() {
+            const cards = document.querySelectorAll('.history-card[data-id]');
+            const allSelected = [...cards].every(c => selectedHistoryIds.has(c.dataset.id));
+            cards.forEach(card => {
+                const id = card.dataset.id;
+                const checkbox = card.querySelector('.hc-checkbox');
+                if (allSelected) {
+                    selectedHistoryIds.delete(id);
+                    card.classList.remove('selected');
+                    checkbox.classList.remove('checked');
+                    checkbox.checked = false;
+                } else if (!selectedHistoryIds.has(id)) {
+                    selectedHistoryIds.add(id);
+                    card.classList.add('selected');
+                    checkbox.classList.add('checked');
+                    checkbox.checked = true;
+                }
+            });
+        }
+
+        async function downloadSelectedHistory() {
+            if (selectedHistoryIds.size === 0) {
+                showToast('请先选择要下载的历史记录', 'warning');
+                return;
+            }
+            const ids = [...selectedHistoryIds];
+            try {
+                const resp = await fetch('/download/history', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ids }),
+                });
+                if (resp.ok) {
+                    const blob = await resp.blob();
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `进项发票记录_历史选中_${new Date().toISOString().slice(0,10)}.xlsx`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    showToast(`已下载${selectedHistoryIds.size}条历史记录`, 'success');
+                } else {
+                    const data = await resp.json();
+                    showToast(data.error || '下载失败', 'error');
+                }
+            } catch (e) {
+                showToast('下载失败: ' + e.message, 'error');
+            }
+        }
+
         // ==================== Init ====================
+        function showToast(msg, type = 'info') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.textContent = msg;
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.classList.add('fade-out');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
         loadResults();
         loadHistory(true);
     </script>

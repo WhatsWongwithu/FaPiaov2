@@ -242,20 +242,14 @@ def _validate_and_fix_items(items):
     5. 品名中混入型号，规格为空 → 从品名提取型号到规格
     """
     for item in items:
-        # ---- 去除规格末尾的单位（个/台/批等）----
+        # ---- 去除规格中的单位（个/台/批等，可能在末尾或中间）----
         spec_val = item.get("spec", "").strip()
         UNITS = "个台批只根米盒箱卷张对副包瓶袋升吨"
-        changed = True
-        while changed and len(spec_val) > 2:
-            changed = False
-            for u in ("千克", "公斤"):
-                if spec_val.endswith(u) and len(spec_val) > len(u) + 1:
-                    spec_val = spec_val[:-len(u)].strip()
-                    changed = True
-                    break
-            if not changed and spec_val[-1] in UNITS and len(spec_val) > 2:
-                spec_val = spec_val[:-1].strip()
-                changed = True
+        # 移除规格中所有单位字符（规格应为字母数字组合，中文单位是OCR混入的）
+        for u in UNITS:
+            spec_val = spec_val.replace(u, "")
+        spec_val = spec_val.replace("千克", "").replace("公斤", "")
+        spec_val = spec_val.strip()
         if spec_val != item.get("spec", "").strip():
             item["spec"] = spec_val
 

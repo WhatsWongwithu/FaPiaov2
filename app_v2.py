@@ -295,16 +295,23 @@ def _save_to_history(invoice, uploaded_by):
     conn.close()
 
 
-def _check_duplicate(inv_num):
+def _check_duplicate(inv_num, username):
     for existing in invoices_store:
-        if existing.get("invoice_num", "") == inv_num:
+        if existing.get("invoice_num", "") == inv_num and existing.get("uploaded_by") == username:
             return existing.get("filename", "未知文件")
     conn = get_db()
-    row = conn.execute("SELECT filename FROM invoices WHERE invoice_num = ?", (inv_num,)).fetchone()
+    row = conn.execute("SELECT filename FROM invoices WHERE invoice_num = ? AND uploaded_by = ?",
+                       (inv_num, username)).fetchone()
     conn.close()
     if row:
         return row["filename"]
     return None
+
+
+def _get_user_invoices():
+    """获取当前用户的发票列表"""
+    username = session.get("username", "")
+    return [inv for inv in invoices_store if inv.get("uploaded_by") == username]
 
 
 # ==================== 认证路由 ====================
@@ -376,8 +383,9 @@ def has_api_key():
 @login_required
 def api_history():
     q = request.args.get("q", "").strip()
-    limit = min(int(request.args.get("limit", 50)), 200)
+    limit = min(int(request.args.get("limit", 20)), 200)
     offset = int(request.args.get("offset", 0))
+    username = session.get("username", "")
 
     conn = get_db()
     if q:
@@ -385,16 +393,18 @@ def api_history():
         rows = conn.execute(
             """SELECT id, invoice_num, date, seller_name, total_amount, filename, uploaded_by, created_at
                FROM invoices
-               WHERE date LIKE ? OR seller_name LIKE ? OR invoice_num LIKE ?
-                  OR total_amount LIKE ? OR uploaded_by LIKE ?
+               WHERE uploaded_by = ? AND (
+                   date LIKE ? OR seller_name LIKE ? OR invoice_num LIKE ?
+                   OR total_amount LIKE ?)
                ORDER BY created_at DESC LIMIT ? OFFSET ?""",
-            (like, like, like, like, like, limit, offset),
+            (username, like, like, like, like, limit, offset),
         ).fetchall()
     else:
         rows = conn.execute(
             """SELECT id, invoice_num, date, seller_name, total_amount, filename, uploaded_by, created_at
-               FROM invoices ORDER BY created_at DESC LIMIT ? OFFSET ?""",
-            (limit, offset),
+               FROM invoices WHERE uploaded_by = ?
+               ORDER BY created_at DESC LIMIT ? OFFSET ?""",
+            (username, limit, offset),
         ).fetchall()
     conn.close()
     return jsonify({"history": [dict(r) for r in rows]})
@@ -473,7 +483,7 @@ def upload():
 
         inv_num = invoice.get("invoice_num", "")
         if inv_num:
-            dup_file = _check_duplicate(inv_num)
+            dup_file = _check_duplicate(inv_num, session.get("username", ""))
             if dup_file:
                 return jsonify({
                     "success": False, "duplicate": True,
@@ -482,6 +492,7 @@ def upload():
 
         invoice["id"] = uuid.uuid4().hex
         invoice["filename"] = file.filename
+        invoice["uploaded_by"] = session.get("username", "")
         invoices_store.append(invoice)
         _save_to_history(invoice, session.get("username", ""))
 
@@ -508,7 +519,8 @@ def upload():
 @login_required
 def results():
     sort_by = request.args.get("sort", "date_desc")
-    sorted_invoices = _sort_invoices(invoices_store, sort_by)
+    user_invoices = _get_user_invoices()
+    sorted_invoices = _sort_invoices(user_invoices, sort_by)
     return jsonify({"invoices": [
         {"id": inv["id"], "filename": inv["filename"], "date": inv["date"],
          "invoice_num": inv["invoice_num"], "total_amount": inv["total_amount"],
@@ -521,10 +533,11 @@ def results():
 @app.route("/download")
 @login_required
 def download():
-    if not invoices_store:
+    user_invoices = _get_user_invoices()
+    if not user_invoices:
         return jsonify({"error": "没有数据"}), 400
     sort_by = request.args.get("sort", "date_desc")
-    sorted_invoices = _sort_invoices(invoices_store, sort_by)
+    sorted_invoices = _sort_invoices(user_invoices, sort_by)
     labels = {"date_desc": "日期新到旧", "date_asc": "日期旧到新",
               "amount_desc": "金额高到低", "amount_asc": "金额低到高"}
     filename = f"进项发票记录_{labels.get(sort_by, '日期新到旧')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
@@ -533,20 +546,55 @@ def download():
     return send_file(output_path, as_attachment=True, download_name=filename)
 
 
+@app.route("/download/history", methods=["POST"])
+@login_required
+def download_history():
+    data = request.json or {}
+    ids = data.get("ids", [])
+    if not ids:
+        return jsonify({"error": "未选择记录"}), 400
+
+    username = session.get("username", "")
+    conn = get_db()
+    placeholders = ",".join("?" * len(ids))
+    rows = conn.execute(
+        f"SELECT * FROM invoices WHERE id IN ({placeholders}) AND uploaded_by = ?",
+        (*ids, username),
+    ).fetchall()
+    conn.close()
+
+    if not rows:
+        return jsonify({"error": "未找到记录"}), 404
+
+    invoices = []
+    for row in rows:
+        inv = dict(row)
+        inv["items"] = json.loads(inv["items"])
+        invoices.append(inv)
+
+    sorted_invoices = _sort_invoices(invoices, "date_desc")
+    filename = f"进项发票记录_历史选中_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    output_path = os.path.join(UPLOAD_DIR, filename)
+    write_excel(sorted_invoices, output_path)
+    return send_file(output_path, as_attachment=True, download_name=filename)
+
+
 @app.route("/clear")
 @login_required
 def clear():
-    invoices_store.clear()
+    username = session.get("username", "")
+    invoices_store[:] = [inv for inv in invoices_store if inv.get("uploaded_by") != username]
     return jsonify({"success": True})
 
 
 @app.route("/delete/<invoice_id>")
 @login_required
 def delete_invoice(invoice_id):
-    global invoices_store
-    invoices_store = [inv for inv in invoices_store if inv["id"] != invoice_id]
+    username = session.get("username", "")
+    invoices_store[:] = [inv for inv in invoices_store
+                         if not (inv["id"] == invoice_id and inv.get("uploaded_by") == username)]
     conn = get_db()
-    conn.execute("DELETE FROM invoices WHERE id = ?", (invoice_id,))
+    conn.execute("DELETE FROM invoices WHERE id = ? AND uploaded_by = ?", (invoice_id, username))
     conn.commit()
     conn.close()
     return jsonify({"success": True})
