@@ -416,7 +416,8 @@
                     if (data.success) {
                         const inv = data.invoice;
                         const retryTag = data.retry_count > 0 ? ` | <span style="color:var(--warning)">重试${data.retry_count}次</span>` : '';
-                        item.innerHTML = `<div class="check">&#10003;</div><div class="info">${file.name}</div><div class="detail">${inv.seller_name} | ${inv.invoice_num} | ${inv.item_count}条${retryTag}</div>`;
+                        const warnTag = data.has_incomplete ? ` | <span style="color:var(--danger)">部分字段未识别完整，建议删除后重新上传</span>` : '';
+                        item.innerHTML = `<div class="check">&#10003;</div><div class="info">${file.name}</div><div class="detail">${inv.seller_name} | ${inv.invoice_num} | ${inv.item_count}条${retryTag}${warnTag}</div>`;
                     } else if (data.duplicate) {
                         item.className = 'progress-item warning';
                         item.innerHTML = `<div class="warn">&#9888;</div><div class="info">${file.name}</div><div class="detail">${data.warning}</div>`;

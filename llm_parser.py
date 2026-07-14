@@ -278,6 +278,18 @@ def _validate_and_fix_items(items):
         qty_f = _parse_number(qty_raw)
         price_f = _parse_number(price_raw)
 
+        # 预检查: price 无法解析为数字（如含两个小数点、非法字符）→ 清除
+        if price_raw.strip() and price_f is None:
+            item["price"] = ""
+            price_raw = ""
+            price_f = None
+
+        # 预检查: qty 无法解析为数字 → 清除
+        if qty_raw.strip() and qty_f is None:
+            item["qty"] = ""
+            qty_raw = ""
+            qty_f = None
+
         # 预检查: 数量必须是正整数(允许±0.02 OCR误差)
         # 非整数数量(如0.07, 1.05)说明价格错误，清空数量让后续策略重新计算
         if qty_f is not None:

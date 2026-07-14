@@ -481,6 +481,9 @@ def upload():
                             or item.get("qty", "").strip()
                             or item.get("price", "").strip()]
 
+        # 检查重试后是否仍有空字段
+        has_incomplete = _has_missing_fields(invoice)
+
         inv_num = invoice.get("invoice_num", "")
         if inv_num:
             dup_file = _check_duplicate(inv_num, session.get("username", ""))
@@ -499,6 +502,7 @@ def upload():
         return jsonify({
             "success": True,
             "retry_count": retry_count,
+            "has_incomplete": has_incomplete,
             "invoice": {
                 "id": invoice["id"], "filename": invoice["filename"],
                 "date": invoice["date"], "invoice_num": invoice["invoice_num"],
