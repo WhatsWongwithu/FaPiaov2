@@ -522,15 +522,13 @@ def upload():
 @app.route("/results")
 @login_required
 def results():
-    sort_by = request.args.get("sort", "date_desc")
     user_invoices = _get_user_invoices()
-    sorted_invoices = _sort_invoices(user_invoices, sort_by)
     return jsonify({"invoices": [
         {"id": inv["id"], "filename": inv["filename"], "date": inv["date"],
          "invoice_num": inv["invoice_num"], "total_amount": inv["total_amount"],
          "seller_name": inv["seller_name"], "item_count": len(inv["items"]),
          "items": inv["items"]}
-        for inv in sorted_invoices
+        for inv in user_invoices
     ]})
 
 
@@ -540,13 +538,9 @@ def download():
     user_invoices = _get_user_invoices()
     if not user_invoices:
         return jsonify({"error": "没有数据"}), 400
-    sort_by = request.args.get("sort", "date_desc")
-    sorted_invoices = _sort_invoices(user_invoices, sort_by)
-    labels = {"date_desc": "日期新到旧", "date_asc": "日期旧到新",
-              "amount_desc": "金额高到低", "amount_asc": "金额低到高"}
-    filename = f"进项发票记录_{labels.get(sort_by, '日期新到旧')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    filename = f"进项发票记录_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
     output_path = os.path.join(UPLOAD_DIR, filename)
-    write_excel(sorted_invoices, output_path)
+    write_excel(user_invoices, output_path)
     return send_file(output_path, as_attachment=True, download_name=filename)
 
 
@@ -570,16 +564,17 @@ def download_history():
     if not rows:
         return jsonify({"error": "未找到记录"}), 404
 
-    invoices = []
+    invoices_by_id = {}
     for row in rows:
         inv = dict(row)
         inv["items"] = json.loads(inv["items"])
-        invoices.append(inv)
+        invoices_by_id[inv["id"]] = inv
 
-    sorted_invoices = _sort_invoices(invoices, "date_desc")
+    invoices = [invoices_by_id[i] for i in ids if i in invoices_by_id]
+
     filename = f"进项发票记录_历史选中_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
     output_path = os.path.join(UPLOAD_DIR, filename)
-    write_excel(sorted_invoices, output_path)
+    write_excel(invoices, output_path)
     return send_file(output_path, as_attachment=True, download_name=filename)
 
 
