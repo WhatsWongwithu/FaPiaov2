@@ -221,7 +221,6 @@ def write_excel(invoices, output_path):
     for c in range(1, num_cols + 1):
         ws.cell(row=sum_row, column=c).border = thin_border
 
-    ws.auto_filter.ref = f"A2:L{max_row}"
     ws.freeze_panes = "A3"
 
     wb.save(output_path)
