@@ -171,10 +171,18 @@ def write_excel(invoices, output_path):
     row = 3
     serial = 1
     for inv in invoices:
+        first_row = True
         for item in inv["items"]:
-            ws.cell(row=row, column=1, value=serial)
-            date_cell = ws.cell(row=row, column=2, value=_to_date(inv["date"]))
-            date_cell.number_format = "YYYY/MM/DD"
+            if first_row:
+                ws.cell(row=row, column=1, value=serial)
+                date_cell = ws.cell(row=row, column=2, value=_to_date(inv["date"]))
+                date_cell.number_format = "YYYY/MM/DD"
+                ws.cell(row=row, column=10, value=_to_number(inv["total_amount"]))
+                ws.cell(row=row, column=11, value=f"NO.{inv['invoice_num']}")
+                ws.cell(row=row, column=12, value=inv["seller_name"])
+                first_row = False
+            else:
+                ws.cell(row=row, column=12, value=inv["seller_name"])
             ws.cell(row=row, column=3, value=item["name"])
             ws.cell(row=row, column=4, value=item["spec"])
             ws.cell(row=row, column=5, value=_to_number(item["qty"]))
@@ -182,9 +190,6 @@ def write_excel(invoices, output_path):
             ws.cell(row=row, column=7, value=_to_number(item["amount"]))
             ws.cell(row=row, column=8, value=item["tax_rate"])
             ws.cell(row=row, column=9, value=_to_number(item["tax"]))
-            ws.cell(row=row, column=10, value=_to_number(inv["total_amount"]))
-            ws.cell(row=row, column=11, value=f"NO.{inv['invoice_num']}")
-            ws.cell(row=row, column=12, value=inv["seller_name"])
             row += 1
         serial += 1
 
@@ -216,30 +221,8 @@ def write_excel(invoices, output_path):
     for c in range(1, num_cols + 1):
         ws.cell(row=sum_row, column=c).border = thin_border
 
-    tab = Table(displayName="InvoiceTable", ref=f"A2:L{max_row}")
-    tab.tableStyleInfo = TableStyleInfo(
-        name="TableStyleMedium2", showRowStripes=False,
-        showColumnStripes=False, showFirstColumn=False, showLastColumn=False,
-    )
-    ws.add_table(tab)
+    ws.auto_filter.ref = f"A2:L{max_row}"
     ws.freeze_panes = "A3"
-
-    # 条件格式1：每张发票第一行蓝底（票号与上一行不同=新发票）
-    from openpyxl.formatting.rule import FormulaRule
-    blue_fill = PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="solid")
-    ws.conditional_formatting.add(
-        f"A3:L{max_row}",
-        FormulaRule(formula=[f'$K3<>$K2'], fill=blue_fill),
-    )
-
-    # 条件格式2：续行的发票级信息（序号/日期/总额/票号/供应商）与上一行相同则隐藏
-    hide_font = Font(color="FFFFFF")
-    for col in ["A", "B", "J", "K", "L"]:
-        rng = f"{col}3:{col}{max_row}"
-        ws.conditional_formatting.add(
-            rng,
-            FormulaRule(formula=[f'{col}3={col}2'], font=hide_font),
-        )
 
     wb.save(output_path)
 
