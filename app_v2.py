@@ -22,7 +22,7 @@ from openpyxl.worksheet.table import Table, TableStyleInfo
 from datetime import datetime, timedelta
 
 from ocr_engine import OCREngine
-from llm_parser import parse_with_deepseek
+from llm_parser import parse_with_deepseek, evaluate_invoice_quality
 from config import get_deepseek_key, get_accounts
 
 FALLBACK_API_KEY = get_deepseek_key()
@@ -264,6 +264,14 @@ def _has_missing_fields(invoice):
     return False
 
 
+def _drop_empty_items(invoice):
+    invoice["items"] = [item for item in invoice.get("items", [])
+                        if item.get("amount", "").strip()
+                        or item.get("qty", "").strip()
+                        or item.get("price", "").strip()]
+    return invoice
+
+
 def _save_to_history(invoice, uploaded_by):
     conn = get_db()
     conn.execute(
@@ -365,7 +373,7 @@ def has_api_key():
 @login_required
 def api_history():
     q = request.args.get("q", "").strip()
-    limit = min(int(request.args.get("limit", 20)), 200)
+    limit = min(int(request.args.get("limit", 10)), 200)
     offset = int(request.args.get("offset", 0))
     username = session.get("username", "")
 
@@ -392,11 +400,45 @@ def api_history():
     return jsonify({"history": [dict(r) for r in rows]})
 
 
+@app.route("/api/history/batch-delete", methods=["POST"])
+@login_required
+def delete_history_batch():
+    data = request.json or {}
+    ids = data.get("ids", [])
+    if not ids:
+        return jsonify({"error": "未选择记录"}), 400
+
+    ids = [str(hid) for hid in ids if str(hid).strip()]
+    if not ids:
+        return jsonify({"error": "未选择记录"}), 400
+
+    username = session.get("username", "")
+    placeholders = ",".join("?" * len(ids))
+    conn = get_db()
+    cur = conn.execute(
+        f"DELETE FROM invoices WHERE id IN ({placeholders}) AND uploaded_by = ?",
+        (*ids, username),
+    )
+    conn.commit()
+    deleted_count = cur.rowcount
+    conn.close()
+
+    invoices_store[:] = [
+        inv for inv in invoices_store
+        if not (inv.get("id") in ids and inv.get("uploaded_by") == username)
+    ]
+    return jsonify({"success": True, "deleted_count": deleted_count})
+
+
 @app.route("/api/history/<hid>")
 @login_required
 def api_history_detail(hid):
+    username = session.get("username", "")
     conn = get_db()
-    row = conn.execute("SELECT * FROM invoices WHERE id = ?", (hid,)).fetchone()
+    row = conn.execute(
+        "SELECT * FROM invoices WHERE id = ? AND uploaded_by = ?",
+        (hid, username),
+    ).fetchone()
     conn.close()
     if not row:
         return jsonify({"error": "未找到"}), 404
@@ -408,10 +450,15 @@ def api_history_detail(hid):
 @app.route("/api/history/<hid>", methods=["DELETE"])
 @login_required
 def delete_history(hid):
+    username = session.get("username", "")
     conn = get_db()
-    conn.execute("DELETE FROM invoices WHERE id = ?", (hid,))
+    conn.execute("DELETE FROM invoices WHERE id = ? AND uploaded_by = ?", (hid, username))
     conn.commit()
     conn.close()
+    invoices_store[:] = [
+        inv for inv in invoices_store
+        if not (inv.get("id") == hid and inv.get("uploaded_by") == username)
+    ]
     return jsonify({"success": True})
 
 
@@ -449,22 +496,41 @@ def upload():
 
         user_api_key = get_user_api_key(session["user_id"])
         max_attempts = 3
-        retry_count = 0
+        candidates = []
+        parse_errors = []
         for attempt in range(max_attempts):
-            invoice = parse_with_deepseek(ocr_results, user_api_key)
-            if not _has_missing_fields(invoice):
-                break
-            if attempt < max_attempts - 1:
-                retry_count += 1
-                print(f"  [重试 {retry_count}/{max_attempts-1}] {file.filename} 部分明细不完整，重新解析...")
+            if attempt > 0:
+                print(f"  [重试 {attempt}/{max_attempts-1}] {file.filename} 重新解析并评分...")
+            try:
+                candidate = parse_with_deepseek(ocr_results, user_api_key)
+                _drop_empty_items(candidate)
+                quality = evaluate_invoice_quality(candidate)
+                candidates.append((quality["score"], quality["matched_rows"], candidate, quality))
+                print(f"  [评分 {quality['score']}] {file.filename} "
+                      f"{quality['matched_rows']}/{quality['total_rows']}行金额匹配")
+                if quality["score"] >= 96 and not _has_missing_fields(candidate):
+                    break
+            except Exception as exc:
+                parse_errors.append(exc)
+                print(f"  [解析失败] {file.filename}: {exc}")
 
-        invoice["items"] = [item for item in invoice.get("items", [])
-                            if item.get("amount", "").strip()
-                            or item.get("qty", "").strip()
-                            or item.get("price", "").strip()]
+        if not candidates:
+            if parse_errors:
+                raise parse_errors[-1]
+            raise RuntimeError("未能解析发票")
 
-        # 检查重试后是否仍有空字段
-        has_incomplete = _has_missing_fields(invoice)
+        candidates.sort(key=lambda c: (c[0], c[1]), reverse=True)
+        best_score, _, invoice, best_quality = candidates[0]
+        retry_count = len(candidates) - 1
+        if best_quality["issues"] and best_score < 96:
+            print(f"  [采用最佳候选 {best_score}] {file.filename}: "
+                  f"{'；'.join(best_quality['issues'][:5])}")
+
+        if retry_count > 0:
+            print(f"  [择优完成] {file.filename} 从 {len(candidates)} 个候选中选择评分最高结果")
+
+        # 检查择优后是否仍有空字段或发票级校验异常
+        has_incomplete = _has_missing_fields(invoice) or best_score < 90
 
         inv_num = invoice.get("invoice_num", "")
         if inv_num:

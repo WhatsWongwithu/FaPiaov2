@@ -76,35 +76,52 @@ def format_ocr_text(ocr_results):
     if not ocr_results:
         return ""
 
-    # 计算页面宽度，用于判断列位置
-    all_x = [r[1] for r in ocr_results]
-    page_width = max(all_x) if all_x else 1000
+    rows = _cluster_ocr_rows(ocr_results)
 
-    # 按Y坐标聚类成行（Y差距<25的视为同一行）
+    # 每行内按X排序，用 | 分隔
+    lines = []
+    for row in rows:
+        row.sort(key=lambda x: x[0])
+        line = " | ".join(text for _, text, _ in row)
+        lines.append(line)
+
+    return "\n".join(lines)
+
+
+def _estimate_row_threshold(ocr_results):
+    """根据当前页面坐标估算同一行的Y轴容差，避免固定像素阈值失准。"""
+    ys = sorted(float(r[2]) for r in ocr_results)
+    gaps = [ys[i + 1] - ys[i] for i in range(len(ys) - 1)]
+    significant_gaps = [gap for gap in gaps if gap > 8]
+    if not significant_gaps:
+        return 25
+    significant_gaps.sort()
+    median_gap = significant_gaps[len(significant_gaps) // 2]
+    return max(12, min(median_gap * 0.45, 45))
+
+
+def _cluster_ocr_rows(ocr_results):
+    """按Y坐标聚类成行，并动态更新当前行中心。"""
+    threshold = _estimate_row_threshold(ocr_results)
     sorted_results = sorted(ocr_results, key=lambda r: r[2])
     rows = []
     current_row = []
     current_y = None
 
     for text, cx, cy in sorted_results:
-        if current_y is None or abs(cy - current_y) < 25:
-            current_row.append((cx, text))
-            current_y = cy if current_y is None else current_y
+        if current_y is None or abs(cy - current_y) <= threshold:
+            current_row.append((cx, text, cy))
+            if current_y is None:
+                current_y = cy
+            else:
+                current_y = (current_y * (len(current_row) - 1) + cy) / len(current_row)
         else:
             rows.append(current_row)
-            current_row = [(cx, text)]
+            current_row = [(cx, text, cy)]
             current_y = cy
     if current_row:
         rows.append(current_row)
-
-    # 每行内按X排序，用 | 分隔
-    lines = []
-    for row in rows:
-        row.sort(key=lambda x: x[0])
-        line = " | ".join(text for _, text in row)
-        lines.append(line)
-
-    return "\n".join(lines)
+    return rows
 
 
 def format_ocr_text_with_coords(ocr_results):
@@ -116,22 +133,7 @@ def format_ocr_text_with_coords(ocr_results):
     if not ocr_results:
         return ""
 
-    # 按Y坐标聚类成行
-    sorted_results = sorted(ocr_results, key=lambda r: r[2])
-    rows = []
-    current_row = []
-    current_y = None
-
-    for text, cx, cy in sorted_results:
-        if current_y is None or abs(cy - current_y) < 25:
-            current_row.append((cx, text, cy))
-            current_y = cy if current_y is None else current_y
-        else:
-            rows.append(current_row)
-            current_row = [(cx, text, cy)]
-            current_y = cy
-    if current_row:
-        rows.append(current_row)
+    rows = _cluster_ocr_rows(ocr_results)
 
     # 每行内按X排序，标注X坐标
     lines = []
@@ -229,6 +231,130 @@ def _count_decimals(s):
     if len(parts) == 2:
         return len(parts[1])
     return 0
+
+
+def _amount_matches(actual, expected, tolerance=0.005):
+    """金额校验：允许 0.5% 或 0.5 元以内的误差。"""
+    if actual is None or expected is None:
+        return False
+    return abs(actual - expected) <= max(abs(expected) * tolerance, 0.5)
+
+
+def evaluate_invoice_quality(invoice):
+    """
+    给一份结构化发票打分，用于多次 LLM 解析后选择最可信的候选。
+    返回: {"score": 0-100, "issues": [...], "matched_rows": n, "total_rows": n}
+    """
+    issues = []
+    score = 0.0
+
+    metadata_fields = [
+        ("invoice_num", "发票号码"),
+        ("date", "开票日期"),
+        ("seller_name", "供应商名称"),
+        ("total_amount", "价税合计"),
+    ]
+    present_meta = 0
+    for key, label in metadata_fields:
+        if str(invoice.get(key, "")).strip():
+            present_meta += 1
+        else:
+            issues.append(f"{label}缺失")
+    score += 20 * present_meta / len(metadata_fields)
+
+    items = invoice.get("items", []) or []
+    if not items:
+        issues.append("明细行缺失")
+    matched_rows = 0
+    item_scores = []
+    item_amounts = []
+    item_taxes = []
+
+    for idx, item in enumerate(items, start=1):
+        item_score = 0.0
+        name = str(item.get("name", "")).strip()
+        spec = str(item.get("spec", "")).strip()
+        qty = _parse_number(item.get("qty", ""))
+        price = _parse_number(item.get("price", ""))
+        amount = _parse_number(item.get("amount", ""))
+        tax = _parse_number(item.get("tax", ""))
+
+        if name:
+            item_score += 10
+        else:
+            issues.append(f"第{idx}行品名缺失")
+
+        if spec:
+            item_score += 10
+        else:
+            issues.append(f"第{idx}行规格缺失")
+
+        if amount is not None and amount > 0:
+            item_score += 15
+            item_amounts.append(amount)
+        else:
+            issues.append(f"第{idx}行金额无效")
+
+        if qty is not None and qty > 0 and abs(qty - round(qty)) <= 0.02:
+            item_score += 15
+        else:
+            issues.append(f"第{idx}行数量无效")
+
+        if price is not None and 0 < price <= 1000000:
+            item_score += 15
+        else:
+            issues.append(f"第{idx}行单价无效")
+
+        if tax is not None:
+            item_taxes.append(tax)
+
+        if qty is not None and price is not None and amount is not None:
+            if _amount_matches(qty * price, amount):
+                item_score += 35
+                matched_rows += 1
+            else:
+                issues.append(f"第{idx}行数量×单价与金额不一致")
+
+        item_scores.append(item_score)
+
+    if item_scores:
+        score += 60 * (sum(item_scores) / len(item_scores)) / 100
+
+    total_amount_sum = _parse_number(invoice.get("total_amount_sum", ""))
+    total_tax_sum = _parse_number(invoice.get("total_tax_sum", ""))
+    total_amount = _parse_number(invoice.get("total_amount", ""))
+
+    totals_score = 0.0
+    if item_amounts and total_amount_sum is not None:
+        if _amount_matches(sum(item_amounts), total_amount_sum):
+            totals_score += 7
+        else:
+            issues.append("明细金额合计与合计金额不一致")
+    elif item_amounts:
+        issues.append("合计金额缺失")
+
+    if item_taxes and total_tax_sum is not None:
+        if _amount_matches(sum(item_taxes), total_tax_sum):
+            totals_score += 5
+        else:
+            issues.append("明细税额合计与合计税额不一致")
+
+    if total_amount_sum is not None and total_tax_sum is not None and total_amount is not None:
+        if _amount_matches(total_amount_sum + total_tax_sum, total_amount):
+            totals_score += 8
+        else:
+            issues.append("合计金额+合计税额与价税合计不一致")
+    elif total_amount is not None:
+        issues.append("发票级合计字段不完整")
+
+    score += totals_score
+
+    return {
+        "score": round(max(0, min(score, 100)), 1),
+        "issues": issues,
+        "matched_rows": matched_rows,
+        "total_rows": len(items),
+    }
 
 
 def _validate_and_fix_items(items):
