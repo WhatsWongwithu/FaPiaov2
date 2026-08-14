@@ -4,92 +4,267 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>登录 · 发票识别系统</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Poppins:wght@500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --primary: #2563EB; --primary-hover: #1D4ED8;
-            --primary-light: #EFF6FF; --primary-border: #BFDBFE;
-            --success: #16A34A; --warning: #D97706; --danger: #DC2626;
-            --surface: #FFFFFF; --text: #111827; --text-secondary: #6B7280;
-            --text-tertiary: #9CA3AF; --border: #E5E7EB; --bg: #F8FAFC;
-            --shadow-lg: 0 4px 16px rgba(37,99,235,0.08), 0 2px 6px rgba(37,99,235,0.04);
-            --radius: 8px; --radius-lg: 12px;
+            --primary: #24508f;
+            --primary-dark: #1d4075;
+            --primary-soft: #edf3fb;
+            --surface: #ffffff;
+            --text: #0f172a;
+            --text2: #475569;
+            --text3: #94a3b8;
+            --danger: #dc2626;
+            --border: #e5ebf3;
+            --radius: 10px;
+            --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", "Helvetica Neue", Arial, sans-serif;
         }
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html { min-height: 100%; }
         body {
-            font-family: 'Inter', -apple-system, sans-serif;
-            background: var(--bg); color: var(--text);
-            min-height: 100vh; display: flex; align-items: center; justify-content: center;
+            min-height: 100vh;
+            font-family: var(--font-sans);
+            color: var(--text);
+            background:
+                linear-gradient(90deg, rgba(255, 255, 255, 0.045) 1px, transparent 1px),
+                linear-gradient(180deg, rgba(255, 255, 255, 0.045) 1px, transparent 1px),
+                linear-gradient(135deg, #071a35 0%, #123462 52%, #eef4fb 52%, #f6f8fb 100%);
+            background-size: 32px 32px, 32px 32px, auto;
+            display: grid;
+            place-items: center;
+            padding: 32px;
             -webkit-font-smoothing: antialiased;
+            text-rendering: optimizeLegibility;
+        }
+        button, input { font: inherit; letter-spacing: 0; }
+        .login-shell {
+            width: min(1040px, 94vw);
+            display: grid;
+            grid-template-columns: minmax(0, 1.1fr) 420px;
+            align-items: stretch;
+            gap: 24px;
+        }
+        .login-hero {
+            min-height: 520px;
+            padding: 46px;
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            border-radius: 22px;
+            color: #ffffff;
+            background: rgba(7, 26, 53, 0.45);
+            box-shadow: 0 24px 70px rgba(7, 26, 53, 0.26);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        .login-brand-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            color: rgba(255, 255, 255, 0.82);
+            font-size: 13px;
+            font-weight: 800;
+        }
+        .login-brand-icon {
+            width: 56px;
+            height: 56px;
+            flex: 0 0 auto;
+            border-radius: 14px;
+            background: linear-gradient(135deg, var(--primary), #1b3f77);
+            color: #ffffff;
+            display: grid;
+            place-items: center;
+            font-size: 24px;
+            font-weight: 800;
+        }
+        .login-hero h1 {
+            max-width: 560px;
+            margin: 32px 0 14px;
+            font-size: 48px;
+            line-height: 1.08;
+            font-weight: 900;
+            letter-spacing: 0;
+        }
+        .login-hero-slogan {
+            max-width: 580px;
+            margin: 0;
+            color: rgba(255, 255, 255, 0.78);
+            font-size: 17px;
+            line-height: 1.8;
+            font-weight: 650;
+        }
+        .login-proof-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 12px;
+            margin-top: 42px;
+        }
+        .login-proof-grid div {
+            min-height: 92px;
+            padding: 15px;
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.08);
+        }
+        .login-proof-grid strong, .login-proof-grid span { display: block; }
+        .login-proof-grid strong {
+            color: #ffffff;
+            font-size: 14px;
+            font-weight: 900;
+        }
+        .login-proof-grid span {
+            margin-top: 8px;
+            color: rgba(255, 255, 255, 0.72);
+            font-size: 12px;
+            font-weight: 650;
+            line-height: 1.5;
         }
         .login-card {
-            background: var(--surface); border: 1px solid var(--border);
-            border-radius: var(--radius-lg); box-shadow: var(--shadow-lg);
-            width: 400px; max-width: 90vw; padding: 40px;
+            align-self: center;
+            border-radius: 16px;
+            background: var(--surface);
+            padding: 34px;
+            box-shadow: 0 24px 70px rgba(10, 28, 62, 0.18);
         }
-        .logo {
-            width: 48px; height: 48px; background: var(--primary);
-            border-radius: 12px; display: flex; align-items: center;
-            justify-content: center; color: white; font-weight: 700;
-            font-size: 20px; font-family: 'Poppins', sans-serif; margin: 0 auto 16px;
+        .login-kicker {
+            margin: 0 0 8px;
+            color: var(--primary);
+            font-size: 12px;
+            font-weight: 900;
         }
-        .login-card h1 {
-            font-family: 'Poppins', 'Inter', sans-serif;
-            font-size: 20px; font-weight: 600; text-align: center;
-            color: var(--text); letter-spacing: -0.01em;
+        .login-brand {
+            margin: 0;
+            color: var(--text);
+            font-size: 26px;
+            font-weight: 900;
+            line-height: 1.2;
         }
-        .login-card .subtitle {
-            font-size: 13px; color: var(--text-secondary);
-            text-align: center; margin-top: 4px; margin-bottom: 32px;
+        .login-slogan {
+            margin: 6px 0 18px;
+            color: var(--text2);
+            font-size: 13px;
+            line-height: 1.7;
+            font-weight: 650;
         }
-        .form-group { margin-bottom: 20px; }
+        .form-group { margin-bottom: 14px; }
         .form-group label {
-            display: block; font-size: 13px; font-weight: 500;
-            color: var(--text); margin-bottom: 6px;
+            display: block;
+            margin-bottom: 6px;
+            color: var(--text);
+            font-size: 13px;
+            font-weight: 750;
         }
         .form-input {
-            width: 100%; padding: 10px 14px; border: 1px solid var(--border);
-            border-radius: var(--radius); font-family: 'Inter', sans-serif;
-            font-size: 14px; color: var(--text); background: var(--surface);
-            transition: border-color 0.15s; outline: none;
+            width: 100%;
+            min-height: 44px;
+            padding: 10px 12px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            background: #ffffff;
+            color: var(--text);
+            outline: none;
+            transition: border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
         }
-        .form-input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-light); }
+        .form-input::placeholder { color: var(--text3); }
+        .form-input:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 4px rgba(36, 80, 143, 0.12);
+            background: #fbfdff;
+        }
         .btn {
-            width: 100%; padding: 12px; border: none; border-radius: var(--radius);
-            font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 600;
-            cursor: pointer; transition: background 0.15s; min-height: 44px;
+            width: 100%;
+            min-height: 44px;
+            margin-top: 8px;
+            border: 0;
+            border-radius: var(--radius);
+            background: var(--primary);
+            color: #ffffff;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 850;
+            transition: background-color 160ms ease, transform 160ms ease, box-shadow 160ms ease;
         }
-        .btn-primary { background: var(--primary); color: white; }
-        .btn-primary:hover { background: var(--primary-hover); }
+        .btn:hover {
+            background: var(--primary-dark);
+            box-shadow: 0 12px 28px rgba(36, 80, 143, 0.2);
+        }
+        .btn:active { transform: scale(0.98); }
+        .btn:focus-visible {
+            outline: 3px solid rgba(36, 80, 143, 0.24);
+            outline-offset: 2px;
+        }
         .alert {
-            padding: 10px 14px; border-radius: var(--radius); font-size: 13px;
-            margin-bottom: 16px; display: none;
+            display: none;
+            margin-bottom: 14px;
+            padding: 10px 12px;
+            border-radius: var(--radius);
+            font-size: 13px;
+            font-weight: 650;
         }
-        .alert.error { background: #FEF2F2; color: var(--danger); border: 1px solid #FECACA; display: block; }
-        .alert.success { background: #F0FDF4; color: var(--success); border: 1px solid #BBF7D0; display: block; }
+        .alert.error {
+            display: block;
+            border: 1px solid #fecaca;
+            background: #fef2f2;
+            color: var(--danger);
+        }
+        .login-footnote {
+            margin-top: 16px;
+            color: var(--text3);
+            font-size: 12px;
+            line-height: 1.6;
+        }
+        @media (max-width: 880px) {
+            body { padding: 18px; }
+            .login-shell { grid-template-columns: 1fr; width: min(520px, 96vw); }
+            .login-hero { min-height: auto; padding: 30px; }
+            .login-hero h1 { font-size: 34px; }
+            .login-proof-grid { grid-template-columns: 1fr; margin-top: 26px; }
+            .login-card { padding: 28px; }
+        }
     </style>
 </head>
 <body>
-    <div class="login-card">
-        <div class="logo">辉</div>
-        <h1>发票识别系统</h1>
-        <p class="subtitle">上海辉驰包装设备有限公司 · 财务部</p>
+    <main class="login-shell">
+        <section class="login-hero" aria-label="系统介绍">
+            <div class="login-brand-row">
+                <div class="login-brand-icon">HC</div>
+                <span>上海辉驰包装设备有限公司</span>
+            </div>
+            <h1>进项发票识别工作台</h1>
+            <p class="login-hero-slogan">从上传识别到明细导出，用更清晰的校验规则整理每一张发票。</p>
+            <div class="login-proof-grid">
+                <div>
+                    <strong>本地 OCR</strong>
+                    <span>PDF 直提文字，图片自动识别</span>
+                </div>
+                <div>
+                    <strong>智能校验</strong>
+                    <span>数量、单价、金额交叉核对</span>
+                </div>
+                <div>
+                    <strong>Excel 导出</strong>
+                    <span>按上传顺序整理财务明细</span>
+                </div>
+            </div>
+        </section>
 
-        <div id="alertBox" class="alert"></div>
+        <section class="login-card" aria-label="登录">
+            <p class="login-kicker">欢迎回来</p>
+            <h2 class="login-brand">辉驰发票系统</h2>
+            <p class="login-slogan">登录后继续上传发票、查看历史记录并导出进项发票 Excel。</p>
 
-        <div class="form-group">
-            <label>用户名</label>
-            <input type="text" class="form-input" id="loginUser" placeholder="请输入用户名">
-        </div>
-        <div class="form-group">
-            <label>密码</label>
-            <input type="password" class="form-input" id="loginPass" placeholder="请输入密码"
-                   onkeydown="if(event.key==='Enter')doLogin()">
-        </div>
-        <button class="btn btn-primary" onclick="doLogin()">登录</button>
-    </div>
+            <div id="alertBox" class="alert"></div>
+
+            <div class="form-group">
+                <label for="loginUser">用户名</label>
+                <input type="text" class="form-input" id="loginUser" placeholder="user1 / user2" autocomplete="username">
+            </div>
+            <div class="form-group">
+                <label for="loginPass">密码</label>
+                <input type="password" class="form-input" id="loginPass" placeholder="请输入密码" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
+            </div>
+            <button class="btn" onclick="doLogin()">登录系统</button>
+            <p class="login-footnote">账号由管理员配置。首次登录后可在设置页保存 DeepSeek API Key。</p>
+        </section>
+    </main>
 
     <script>
         function showAlert(type, msg) {
