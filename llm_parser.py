@@ -10,6 +10,59 @@ import requests
 DEEPSEEK_API_URL = "https://api.deepseek.com/chat/completions"
 DEEPSEEK_MODEL = "deepseek-chat"
 
+
+class DeepSeekConnectionError(Exception):
+    """用于向设置页返回可读的连接测试错误。"""
+
+
+def test_deepseek_connection(api_key):
+    """使用最小聊天请求验证 DeepSeek API Key。"""
+    api_key = (api_key or "").strip()
+    if not api_key:
+        raise DeepSeekConnectionError("请先输入 DeepSeek API Key")
+
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "model": DEEPSEEK_MODEL,
+        "messages": [{"role": "user", "content": "Reply with OK."}],
+        "temperature": 0,
+        "max_tokens": 2,
+        "stream": False,
+    }
+
+    try:
+        resp = requests.post(
+            DEEPSEEK_API_URL, headers=headers, json=payload, timeout=20
+        )
+    except requests.Timeout as exc:
+        raise DeepSeekConnectionError("连接超时，请稍后重试") from exc
+    except requests.RequestException as exc:
+        raise DeepSeekConnectionError("无法连接 DeepSeek，请检查服务器网络") from exc
+
+    if resp.status_code == 401:
+        raise DeepSeekConnectionError("API Key 无效或已失效")
+    if resp.status_code == 402:
+        raise DeepSeekConnectionError("DeepSeek 账户余额不足")
+    if resp.status_code == 429:
+        raise DeepSeekConnectionError("请求过于频繁，请稍后重试")
+    if not resp.ok:
+        raise DeepSeekConnectionError(
+            f"DeepSeek 返回异常状态（{resp.status_code}）"
+        )
+
+    try:
+        data = resp.json()
+        choices = data.get("choices") or []
+        if not choices:
+            raise ValueError("missing choices")
+    except (AttributeError, ValueError, TypeError) as exc:
+        raise DeepSeekConnectionError("DeepSeek 返回了无法识别的响应") from exc
+
+    return {"model": data.get("model") or DEEPSEEK_MODEL}
+
 # 提示词：告诉DeepSeek如何解析发票
 SYSTEM_PROMPT = """你是一个专业的发票信息提取助手。用户会给你发票OCR识别的文字内容，每段文字前标注了X坐标（横向位置），按行排列。
 X坐标可以帮助你判断文字属于表格的哪一列：X越小越靠左（品名列），X越大越靠右（税额列）。

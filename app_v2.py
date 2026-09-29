@@ -22,7 +22,12 @@ from openpyxl.worksheet.table import Table, TableStyleInfo
 from datetime import datetime, timedelta
 
 from ocr_engine import OCREngine
-from llm_parser import parse_with_deepseek, evaluate_invoice_quality
+from llm_parser import (
+    DeepSeekConnectionError,
+    evaluate_invoice_quality,
+    parse_with_deepseek,
+    test_deepseek_connection,
+)
 from config import get_deepseek_key, get_accounts
 
 FALLBACK_API_KEY = get_deepseek_key()
@@ -334,7 +339,7 @@ def logout():
 
 
 # ==================== API Key 设置 ====================
-@app.route("/settings", methods=["GET", "POST"])
+@app.route("/settings", methods=["GET", "POST", "DELETE"])
 @login_required
 def settings():
     if request.method == "GET":
@@ -342,11 +347,28 @@ def settings():
         user = conn.execute("SELECT deepseek_api_key FROM users WHERE id = ?",
                             (session["user_id"],)).fetchone()
         conn.close()
-        has_key = bool(user and user["deepseek_api_key"])
-        return render_template("settings.html", username=session.get("username", ""), has_key=has_key)
+        saved_key = user["deepseek_api_key"] if user else ""
+        has_key = bool(saved_key)
+        key_hint = f"末四位 {saved_key[-4:]}" if len(saved_key) >= 4 else "已安全保存"
+        return render_template(
+            "settings.html",
+            username=session.get("username", ""),
+            has_key=has_key,
+            key_hint=key_hint,
+        )
+
+    if request.method == "DELETE":
+        conn = get_db()
+        conn.execute(
+            "UPDATE users SET deepseek_api_key = '' WHERE id = ?",
+            (session["user_id"],),
+        )
+        conn.commit()
+        conn.close()
+        return jsonify({"success": True, "message": "API Key 已移除"})
 
     data = request.json or request.form
-    api_key = data.get("api_key", "").strip()
+    api_key = str(data.get("api_key") or "").strip()
     if not api_key:
         return jsonify({"error": "请输入API Key"}), 400
 
@@ -355,7 +377,37 @@ def settings():
                  (api_key, session["user_id"]))
     conn.commit()
     conn.close()
-    return jsonify({"success": True, "redirect": "/"})
+    return jsonify({"success": True, "message": "API Key 已保存", "redirect": "/"})
+
+
+@app.route("/api/user/test_key", methods=["POST"])
+@login_required
+def test_api_key():
+    data = request.get_json(silent=True) or {}
+    api_key = str(data.get("api_key") or "").strip()
+
+    if not api_key:
+        conn = get_db()
+        user = conn.execute(
+            "SELECT deepseek_api_key FROM users WHERE id = ?",
+            (session["user_id"],),
+        ).fetchone()
+        conn.close()
+        api_key = user["deepseek_api_key"] if user else ""
+
+    if not api_key:
+        return jsonify({"success": False, "error": "请先输入或保存 API Key"}), 400
+
+    try:
+        result = test_deepseek_connection(api_key)
+    except DeepSeekConnectionError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 400
+
+    return jsonify({
+        "success": True,
+        "message": "连接成功，DeepSeek 接口可正常调用",
+        "model": result["model"],
+    })
 
 
 @app.route("/api/user/has_key")
@@ -466,12 +518,6 @@ def delete_history(hid):
 @app.route("/")
 @login_required
 def index():
-    conn = get_db()
-    user = conn.execute("SELECT deepseek_api_key FROM users WHERE id = ?",
-                        (session["user_id"],)).fetchone()
-    conn.close()
-    if not user or not user["deepseek_api_key"]:
-        return redirect("/settings")
     return render_template("index_v2.html",
                            username=session.get("username", ""))
 
@@ -487,6 +533,12 @@ def upload():
     if ext not in ALL_EXTENSIONS:
         return jsonify({"error": f"不支持的格式: {ext}"}), 400
 
+    user_api_key = get_user_api_key(session["user_id"])
+    if not user_api_key:
+        return jsonify({
+            "error": "尚未配置 DeepSeek API Key，请先前往设置页配置"
+        }), 400
+
     safe_name = f"{uuid.uuid4().hex}{ext}"
     file_path = os.path.join(UPLOAD_DIR, safe_name)
     file.save(file_path)
@@ -494,7 +546,6 @@ def upload():
     try:
         ocr_results = ocr_engine.recognize(file_path)
 
-        user_api_key = get_user_api_key(session["user_id"])
         max_attempts = 3
         candidates = []
         parse_errors = []
