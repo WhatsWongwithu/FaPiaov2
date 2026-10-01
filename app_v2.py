@@ -35,7 +35,7 @@ FALLBACK_API_KEY = get_deepseek_key()
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
-DB_PATH = os.path.join(BASE_DIR, "history.db")
+DB_PATH = os.environ.get("FAPIAO_DB_PATH", os.path.join(BASE_DIR, "history.db"))
 
 IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff")
 PDF_EXTENSIONS = (".pdf",)
@@ -68,7 +68,10 @@ def init_db():
             items         TEXT,
             filename      TEXT,
             uploaded_by   TEXT,
-            created_at    TEXT
+            created_at    TEXT,
+            deleted_at    TEXT,
+            deleted_by    TEXT,
+            deleted_ip    TEXT
         )
     """)
     conn.execute("""
@@ -79,6 +82,35 @@ def init_db():
             deepseek_api_key  TEXT DEFAULT '',
             created_at        TEXT
         )
+    """)
+    invoice_columns = {
+        row["name"] for row in conn.execute("PRAGMA table_info(invoices)").fetchall()
+    }
+    for column, definition in (
+        ("deleted_at", "TEXT"),
+        ("deleted_by", "TEXT"),
+        ("deleted_ip", "TEXT"),
+    ):
+        if column not in invoice_columns:
+            conn.execute(f"ALTER TABLE invoices ADD COLUMN {column} {definition}")
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS invoice_audit_logs (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            invoice_id    TEXT NOT NULL,
+            invoice_num   TEXT,
+            action        TEXT NOT NULL,
+            operated_by   TEXT,
+            ip_address    TEXT,
+            created_at    TEXT NOT NULL
+        )
+    """)
+    conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_invoices_user_deleted_created
+        ON invoices (uploaded_by, deleted_at, created_at)
+    """)
+    conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_invoice_audit_invoice_created
+        ON invoice_audit_logs (invoice_id, created_at)
     """)
     # 初始化2个固定账号
     accounts = get_accounts()
@@ -92,6 +124,10 @@ def init_db():
             print(f"  账号: {acc['username']} / {acc['password']}")
     conn.commit()
     conn.close()
+
+
+# Gunicorn imports app_v2:app without entering the __main__ block.
+init_db()
 
 
 def get_user_api_key(user_id):
@@ -290,13 +326,94 @@ def _save_to_history(invoice, uploaded_by):
     conn.close()
 
 
+def _client_ip():
+    forwarded_for = request.headers.get("X-Forwarded-For", "")
+    if forwarded_for:
+        return forwarded_for.split(",", 1)[0].strip()
+    return request.remote_addr or ""
+
+
+def _soft_delete_invoices(ids, username):
+    """Hide owned invoices while retaining their data and an audit trail."""
+    ids = list(dict.fromkeys(str(hid).strip() for hid in ids if str(hid).strip()))
+    if not ids:
+        return []
+
+    placeholders = ",".join("?" * len(ids))
+    conn = get_db()
+    rows = conn.execute(
+        f"""SELECT id, invoice_num FROM invoices
+            WHERE id IN ({placeholders}) AND uploaded_by = ? AND deleted_at IS NULL""",
+        (*ids, username),
+    ).fetchall()
+    deleted_ids = [row["id"] for row in rows]
+    if not deleted_ids:
+        conn.close()
+        return []
+
+    deleted_at = datetime.now().isoformat()
+    ip_address = _client_ip()
+    active_placeholders = ",".join("?" * len(deleted_ids))
+    conn.execute(
+        f"""UPDATE invoices
+            SET deleted_at = ?, deleted_by = ?, deleted_ip = ?
+            WHERE id IN ({active_placeholders}) AND uploaded_by = ? AND deleted_at IS NULL""",
+        (deleted_at, username, ip_address, *deleted_ids, username),
+    )
+    conn.executemany(
+        """INSERT INTO invoice_audit_logs
+           (invoice_id, invoice_num, action, operated_by, ip_address, created_at)
+           VALUES (?, ?, 'delete', ?, ?, ?)""",
+        [
+            (row["id"], row["invoice_num"], username, ip_address, deleted_at)
+            for row in rows
+        ],
+    )
+    conn.commit()
+    conn.close()
+    return deleted_ids
+
+
+def _restore_invoice(invoice_id, username):
+    conn = get_db()
+    row = conn.execute(
+        """SELECT id, invoice_num FROM invoices
+           WHERE id = ? AND uploaded_by = ? AND deleted_at IS NOT NULL""",
+        (invoice_id, username),
+    ).fetchone()
+    if not row:
+        conn.close()
+        return False
+
+    restored_at = datetime.now().isoformat()
+    ip_address = _client_ip()
+    conn.execute(
+        """UPDATE invoices
+           SET deleted_at = NULL, deleted_by = NULL, deleted_ip = NULL
+           WHERE id = ? AND uploaded_by = ?""",
+        (invoice_id, username),
+    )
+    conn.execute(
+        """INSERT INTO invoice_audit_logs
+           (invoice_id, invoice_num, action, operated_by, ip_address, created_at)
+           VALUES (?, ?, 'restore', ?, ?, ?)""",
+        (row["id"], row["invoice_num"], username, ip_address, restored_at),
+    )
+    conn.commit()
+    conn.close()
+    return True
+
+
 def _check_duplicate(inv_num, username):
     for existing in invoices_store:
         if existing.get("invoice_num", "") == inv_num and existing.get("uploaded_by") == username:
             return existing.get("filename", "未知文件")
     conn = get_db()
-    row = conn.execute("SELECT filename FROM invoices WHERE invoice_num = ? AND uploaded_by = ?",
-                       (inv_num, username)).fetchone()
+    row = conn.execute(
+        """SELECT filename FROM invoices
+           WHERE invoice_num = ? AND uploaded_by = ? AND deleted_at IS NULL""",
+        (inv_num, username),
+    ).fetchone()
     conn.close()
     if row:
         return row["filename"]
@@ -435,7 +552,7 @@ def api_history():
         rows = conn.execute(
             """SELECT id, invoice_num, date, seller_name, total_amount, filename, uploaded_by, created_at
                FROM invoices
-               WHERE uploaded_by = ? AND (
+               WHERE uploaded_by = ? AND deleted_at IS NULL AND (
                    date LIKE ? OR seller_name LIKE ? OR invoice_num LIKE ?
                    OR total_amount LIKE ?)
                ORDER BY created_at DESC LIMIT ? OFFSET ?""",
@@ -444,7 +561,7 @@ def api_history():
     else:
         rows = conn.execute(
             """SELECT id, invoice_num, date, seller_name, total_amount, filename, uploaded_by, created_at
-               FROM invoices WHERE uploaded_by = ?
+               FROM invoices WHERE uploaded_by = ? AND deleted_at IS NULL
                ORDER BY created_at DESC LIMIT ? OFFSET ?""",
             (username, limit, offset),
         ).fetchall()
@@ -465,21 +582,41 @@ def delete_history_batch():
         return jsonify({"error": "未选择记录"}), 400
 
     username = session.get("username", "")
-    placeholders = ",".join("?" * len(ids))
-    conn = get_db()
-    cur = conn.execute(
-        f"DELETE FROM invoices WHERE id IN ({placeholders}) AND uploaded_by = ?",
-        (*ids, username),
-    )
-    conn.commit()
-    deleted_count = cur.rowcount
-    conn.close()
+    deleted_ids = _soft_delete_invoices(ids, username)
 
     invoices_store[:] = [
         inv for inv in invoices_store
-        if not (inv.get("id") in ids and inv.get("uploaded_by") == username)
+        if not (inv.get("id") in deleted_ids and inv.get("uploaded_by") == username)
     ]
-    return jsonify({"success": True, "deleted_count": deleted_count})
+    return jsonify({"success": True, "deleted_count": len(deleted_ids)})
+
+
+@app.route("/api/history/deleted")
+@login_required
+def api_deleted_history():
+    username = session.get("username", "")
+    limit = min(int(request.args.get("limit", 50)), 200)
+    offset = max(int(request.args.get("offset", 0)), 0)
+    conn = get_db()
+    rows = conn.execute(
+        """SELECT id, invoice_num, date, seller_name, total_amount, filename,
+                  uploaded_by, created_at, deleted_at, deleted_by, deleted_ip
+           FROM invoices
+           WHERE uploaded_by = ? AND deleted_at IS NOT NULL
+           ORDER BY deleted_at DESC LIMIT ? OFFSET ?""",
+        (username, limit, offset),
+    ).fetchall()
+    conn.close()
+    return jsonify({"history": [dict(row) for row in rows]})
+
+
+@app.route("/api/history/<hid>/restore", methods=["POST"])
+@login_required
+def restore_history(hid):
+    username = session.get("username", "")
+    if not _restore_invoice(hid, username):
+        return jsonify({"error": "未找到已删除记录"}), 404
+    return jsonify({"success": True})
 
 
 @app.route("/api/history/<hid>")
@@ -488,7 +625,8 @@ def api_history_detail(hid):
     username = session.get("username", "")
     conn = get_db()
     row = conn.execute(
-        "SELECT * FROM invoices WHERE id = ? AND uploaded_by = ?",
+        """SELECT * FROM invoices
+           WHERE id = ? AND uploaded_by = ? AND deleted_at IS NULL""",
         (hid, username),
     ).fetchone()
     conn.close()
@@ -503,15 +641,14 @@ def api_history_detail(hid):
 @login_required
 def delete_history(hid):
     username = session.get("username", "")
-    conn = get_db()
-    conn.execute("DELETE FROM invoices WHERE id = ? AND uploaded_by = ?", (hid, username))
-    conn.commit()
-    conn.close()
+    deleted_ids = _soft_delete_invoices([hid], username)
     invoices_store[:] = [
         inv for inv in invoices_store
-        if not (inv.get("id") == hid and inv.get("uploaded_by") == username)
+        if not (inv.get("id") in deleted_ids and inv.get("uploaded_by") == username)
     ]
-    return jsonify({"success": True})
+    if not deleted_ids:
+        return jsonify({"error": "未找到记录或记录已删除"}), 404
+    return jsonify({"success": True, "deleted_count": 1})
 
 
 # ==================== 主页面路由 ====================
@@ -655,7 +792,8 @@ def download_history():
     conn = get_db()
     placeholders = ",".join("?" * len(ids))
     rows = conn.execute(
-        f"SELECT * FROM invoices WHERE id IN ({placeholders}) AND uploaded_by = ?",
+        f"""SELECT * FROM invoices
+            WHERE id IN ({placeholders}) AND uploaded_by = ? AND deleted_at IS NULL""",
         (*ids, username),
     ).fetchall()
     conn.close()
@@ -685,21 +823,20 @@ def clear():
     return jsonify({"success": True})
 
 
-@app.route("/delete/<invoice_id>")
+@app.route("/delete/<invoice_id>", methods=["DELETE"])
 @login_required
 def delete_invoice(invoice_id):
     username = session.get("username", "")
+    deleted_ids = _soft_delete_invoices([invoice_id], username)
     invoices_store[:] = [inv for inv in invoices_store
-                         if not (inv["id"] == invoice_id and inv.get("uploaded_by") == username)]
-    conn = get_db()
-    conn.execute("DELETE FROM invoices WHERE id = ? AND uploaded_by = ?", (invoice_id, username))
-    conn.commit()
-    conn.close()
-    return jsonify({"success": True})
+                         if not (inv.get("id") in deleted_ids
+                                 and inv.get("uploaded_by") == username)]
+    if not deleted_ids:
+        return jsonify({"error": "未找到记录或记录已删除"}), 404
+    return jsonify({"success": True, "deleted_count": 1})
 
 
 if __name__ == "__main__":
-    init_db()
     print("=" * 55)
     print("  发票识别系统 V3 - OCR + DeepSeek LLM")
     print("  上海辉驰包装设备有限公司 财务部")

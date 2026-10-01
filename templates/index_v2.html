@@ -458,7 +458,7 @@
             });
         }
 
-        async function deleteInvoice(id) { if (!confirm('确认删除？')) return; await fetch(`/delete/${id}`); loadResults(); loadHistory(true); }
+        async function deleteInvoice(id) { if (!confirm('确认移到回收站？')) return; await fetch(`/delete/${id}`, { method: 'DELETE' }); loadResults(); loadHistory(true); }
         async function clearAll() { if (!confirm('确认新建批次？\n当前列表将清空，历史记录保留。')) return; await fetch('/clear'); progressSection.innerHTML=''; progressSection.classList.remove('active'); loadResults(); showToast('已清空当前列表，可开始上传新一批发票', 'success'); }
         function downloadExcel() { window.location.href = '/download'; }
 
@@ -521,7 +521,7 @@
 
         async function deleteHistory(hid, e) {
             e.stopPropagation();
-            if (!confirm('确认删除此历史记录？')) return;
+            if (!confirm('确认将此历史记录移到回收站？')) return;
             await fetch(`/api/history/${hid}`, { method: 'DELETE' });
             selectedHistoryIds = selectedHistoryIds.filter(id => id !== hid);
             loadHistory(true);
@@ -634,7 +634,7 @@
                 return;
             }
             const ids = [...selectedHistoryIds];
-            if (!confirm(`确认删除选中的 ${ids.length} 条历史记录？`)) return;
+            if (!confirm(`确认将选中的 ${ids.length} 条历史记录移到回收站？`)) return;
             try {
                 const resp = await fetch('/api/history/batch-delete', {
                     method: 'POST',
@@ -644,7 +644,7 @@
                 const data = await resp.json();
                 if (resp.ok && data.success) {
                     selectedHistoryIds = selectedHistoryIds.filter(id => !ids.includes(id));
-                    showToast(`已删除${data.deleted_count || ids.length}条历史记录`, 'success');
+                    showToast(`已将${data.deleted_count || ids.length}条历史记录移到回收站`, 'success');
                     loadHistory(true);
                 } else {
                     showToast(data.error || '删除失败', 'error');
