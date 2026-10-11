@@ -93,6 +93,7 @@
             transition: background 0.12s; margin-bottom: 4px; position: relative;
         }
         .history-card:hover { background: var(--primary-light); }
+        .history-card:hover:not(.selected) .hc-date { padding-left: 24px; }
         .history-card.active { background: var(--primary-light); border-left: 3px solid var(--primary); }
         .history-card .hc-date { font-size: 11px; color: var(--text-tertiary); margin-bottom: 2px; }
         .history-card .hc-seller { font-size: 13px; font-weight: 500; color: var(--text); margin-bottom: 2px; }
@@ -110,11 +111,15 @@
             cursor: pointer; opacity: 0; transition: opacity 0.15s;
         }
         .history-card:hover .hc-checkbox { opacity: 1; }
-        .history-card.selected { background: var(--primary-light); border-left: 3px solid var(--primary); }
+        .history-card.selected {
+            background: var(--primary-light); border-left: 3px solid var(--primary);
+            /* Reserve a dedicated row for the checkbox and selection order. */
+            padding-top: 34px;
+        }
         .history-card.selected .hc-checkbox { opacity: 1; }
         .history-card .hc-checkbox.checked { opacity: 1; }
         .history-card .hc-order {
-            position: absolute; top: 6px; left: 32px; min-width: 18px; height: 18px;
+            position: absolute; top: 8px; left: 34px; min-width: 18px; height: 18px;
             background: var(--primary); color: white; border-radius: 9px;
             font-size: 11px; font-weight: 600; display: flex; align-items: center;
             justify-content: center; padding: 0 5px; z-index: 1;
@@ -166,13 +171,23 @@
         .upload-zone .formats { margin-top: 10px; font-size: 11px; color: var(--text-tertiary); }
 
         /* ==================== Progress ==================== */
-        .progress-section { margin-top: 16px; display: none; }
+        .progress-section { margin-top: 16px; display: none; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); overflow: hidden; }
         .progress-section.active { display: block; }
+        .task-queue-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 14px; background: var(--bg); border-bottom: 1px solid var(--border); font-size: 12px; }
+        .task-queue-header strong { font-size: 13px; }
+        .task-queue-header span { color: var(--text-secondary); }
+        .task-queue-controls { display: flex; align-items: center; gap: 10px; }
+        .task-cancel-button { padding: 4px 9px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text-secondary); font-size: 11px; cursor: pointer; flex-shrink: 0; }
+        .task-cancel-button:hover { border-color: var(--danger); color: var(--danger); }
+        .task-cancel-button:disabled { opacity: .6; cursor: default; }
+        .progress-item.cancelled { opacity: .65; }
+        #progressTaskList { padding: 8px; max-height: 360px; overflow-y: auto; }
         .progress-item {
             display: flex; align-items: center; padding: 10px 14px; background: var(--bg);
             border: 1px solid var(--border-light); border-radius: var(--radius);
             margin-bottom: 6px; font-size: 13px;
         }
+        .progress-item:last-child { margin-bottom: 0; }
         .progress-item .spinner {
             width: 16px; height: 16px; border: 2px solid var(--border);
             border-top-color: var(--primary); border-radius: 50%;
@@ -184,6 +199,9 @@
         .progress-item.warning { background: #FFFBEB; border-color: #FDE68A; }
         .progress-item .info { color: var(--text); flex: 1; font-weight: 500; }
         .progress-item .detail { color: var(--text-secondary); font-size: 12px; }
+        .progress-item .task-state { width: 16px; margin-right: 10px; flex-shrink: 0; text-align: center; }
+        .progress-item.queued { background: var(--surface); }
+        .progress-item.queued .task-state { color: var(--text-tertiary); }
         @keyframes spin { to { transform: rotate(360deg); } }
 
         /* ==================== Stats ==================== */
@@ -252,10 +270,33 @@
         .toast.fade-out { animation: toastOut 0.3s ease forwards; }
         @keyframes toastIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
         @keyframes toastOut { to { opacity: 0; transform: translateY(20px); } }
+
+        .duplicate-dialog-backdrop {
+            position: fixed; inset: 0; z-index: 10000; display: grid; place-items: center;
+            padding: 20px; background: rgba(15, 23, 42, .52); backdrop-filter: blur(2px);
+        }
+        .duplicate-dialog {
+            width: min(100%, 480px); padding: 26px; border: 1px solid var(--border);
+            border-radius: 16px; background: var(--surface); box-shadow: 0 24px 70px rgba(15,23,42,.24);
+        }
+        .duplicate-dialog h2 { font-size: 18px; line-height: 1.4; margin-bottom: 8px; }
+        .duplicate-dialog p { color: var(--text-secondary); font-size: 14px; line-height: 1.65; overflow-wrap: anywhere; }
+        .duplicate-dialog .duplicate-number { margin: 12px 0 4px; color: var(--text); font-weight: 600; }
+        .duplicate-dialog .duplicate-countdown { margin-top: 14px; font-size: 12px; }
+        .duplicate-dialog-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; }
+        .duplicate-dialog-actions .btn { min-height: 40px; }
+        @media (max-width: 520px) {
+            .duplicate-dialog { padding: 22px 18px; }
+            .duplicate-dialog-actions { flex-direction: column-reverse; }
+            .duplicate-dialog-actions .btn { width: 100%; }
+            .task-queue-header { align-items: flex-start; }
+            .task-queue-controls { align-items: flex-end; flex-direction: column-reverse; gap: 5px; }
+        }
     </style>
 </head>
 <body>
     <div class="toast-container" id="toastContainer"></div>
+    <div id="duplicateDialogRoot"></div>
     <header class="header">
         <div class="header-left">
             <div class="header-logo">辉</div>
@@ -318,10 +359,19 @@
                         </div>
                         <h3>拖拽发票文件到此处，或点击选择</h3>
                         <p>支持批量上传，系统自动识别发票内容并归类</p>
-                        <div class="formats">JPG / PNG / BMP / TIFF / PDF · 本地识别，数据不上传</div>
+                        <div class="formats">JPG / PNG / BMP / TIFF / PDF · {% if recognition_mode == 'local' %}本地模型识别，数据不发送到云端{% else %}OCR 识别与云端结构化解析{% endif %}</div>
                     </div>
                     <input type="file" id="fileInput" multiple accept=".jpg,.jpeg,.png,.bmp,.tif,.tiff,.pdf" style="display:none">
-                    <div class="progress-section" id="progressSection"></div>
+                    <section class="progress-section" id="progressSection" aria-label="发票识别任务">
+                        <div class="task-queue-header">
+                            <strong>识别任务</strong>
+                            <div class="task-queue-controls">
+                                <span id="queueSummary">暂无任务</span>
+                                <button class="btn btn-secondary btn-sm" id="queuePauseButton" type="button" onclick="toggleUploadQueuePause()">暂停队列</button>
+                            </div>
+                        </div>
+                        <div id="progressTaskList"></div>
+                    </section>
                 </div>
 
                 <div class="stats" id="statsBar" style="display:none">
@@ -348,7 +398,7 @@
                     <div class="action-bar">
                         <button class="btn btn-success btn-lg" onclick="downloadExcel()">
                             <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v12m0 0 4-4m-4 4-4-4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" />
                             </svg>
                             下载 Excel
                         </button>
@@ -367,6 +417,12 @@
         let historyOffset = 0;
         let historyLimit = 10;
         let searchTimer = null;
+        const uploadQueue = [];
+        const uploadTasks = [];
+        let uploadQueueRunning = false;
+        let uploadQueuePaused = false;
+        const queuePauseWaiters = [];
+        let duplicateDialogQueue = Promise.resolve();
 
         // ==================== Upload ====================
         uploadZone.addEventListener('click', () => fileInput.click());
@@ -378,51 +434,247 @@
         uploadZone.addEventListener('drop', (e) => { e.preventDefault(); uploadZone.classList.remove('dragover'); handleFiles(e.dataTransfer.files); });
         fileInput.addEventListener('change', (e) => { handleFiles(e.target.files); fileInput.value = ''; });
 
-        async function handleFiles(files) {
-            if (!files.length) return;
+        function handleFiles(files) {
+            const acceptedFiles = Array.from(files || []);
+            if (!acceptedFiles.length) return;
             progressSection.classList.add('active');
-            progressSection.innerHTML = '';
-
-            const CONCURRENCY = 3;
-            const fileArr = Array.from(files);
-            const items = fileArr.map((file, i) => {
+            acceptedFiles.forEach((file) => {
                 const item = document.createElement('div');
-                item.className = 'progress-item';
-                item.innerHTML = `<div class="spinner"></div><div class="info">[${i+1}/${fileArr.length}] 识别中: ${file.name}</div>`;
-                progressSection.appendChild(item);
-                return { file, item, index: i };
+                document.getElementById('progressTaskList').appendChild(item);
+                const taskId = window.crypto?.randomUUID ? window.crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+                const job = { id: taskId, file, item, status: 'queued' };
+                renderTask(job, 'queued', '排队中');
+                uploadTasks.push(job);
+                uploadQueue.push(job);
             });
+            updateQueueSummary();
+            void runUploadQueue();
+        }
 
-            async function processOne({ file, item, index }) {
-                try {
-                    const formData = new FormData();
-                    formData.append('file', file);
-                    const resp = await fetch('/upload', { method: 'POST', body: formData });
-                    const data = await resp.json();
-                    if (data.success) {
-                        const inv = data.invoice;
-                        const retryTag = data.retry_count > 0 ? ` | <span style="color:var(--warning)">重试${data.retry_count}次</span>` : '';
-                        const warnTag = data.has_incomplete ? ` | <span style="color:var(--danger)">部分字段未识别完整，建议删除后重新上传</span>` : '';
-                        item.innerHTML = `<div class="check">&#10003;</div><div class="info">${file.name}</div><div class="detail">${inv.seller_name} | ${inv.invoice_num} | ${inv.item_count}条${retryTag}${warnTag}</div>`;
-                    } else if (data.duplicate) {
-                        item.className = 'progress-item warning';
-                        item.innerHTML = `<div class="warn">&#9888;</div><div class="info">${file.name}</div><div class="detail">${data.warning}</div>`;
-                    } else {
-                        item.innerHTML = `<div class="cross">&#10007;</div><div class="info">${file.name}</div><div class="detail">${data.error}</div>`;
-                    }
-                } catch (err) {
-                    item.innerHTML = `<div class="cross">&#10007;</div><div class="info">${file.name}</div><div class="detail">错误: ${err.message}</div>`;
+        function updateQueueSummary() {
+            const queued = uploadTasks.filter(task => task.status === 'queued').length;
+            const running = uploadTasks.filter(task => ['running', 'cancelling'].includes(task.status)).length;
+            const finished = uploadTasks.filter(task => ['complete', 'cached', 'error', 'cancelled'].includes(task.status)).length;
+            document.getElementById('queueSummary').textContent =
+                `${uploadTasks.length} 个任务 · 排队 ${queued} · 处理中 ${running} · 已完成 ${finished}`;
+            document.getElementById('queuePauseButton').textContent = uploadQueuePaused ? '继续队列' : '暂停队列';
+        }
+
+        function toggleUploadQueuePause() {
+            uploadQueuePaused = !uploadQueuePaused;
+            updateQueueSummary();
+            if (!uploadQueuePaused) while (queuePauseWaiters.length) queuePauseWaiters.shift()();
+            showToast(uploadQueuePaused ? '已暂停后续任务，当前发票会处理完成' : '队列继续处理', 'info');
+        }
+
+        function waitForQueueResume() {
+            if (!uploadQueuePaused) return Promise.resolve();
+            return new Promise(resolve => queuePauseWaiters.push(resolve));
+        }
+
+        function removeUploadTask(job) {
+            const taskIndex = uploadTasks.indexOf(job);
+            if (taskIndex >= 0) uploadTasks.splice(taskIndex, 1);
+            job.item.remove();
+            updateQueueSummary();
+        }
+
+        async function deleteUploadTask(taskId) {
+            const job = uploadTasks.find(task => task.id === taskId);
+            if (!job || job.deleteRequested) return;
+            if (job.status === 'queued') {
+                const index = uploadQueue.indexOf(job);
+                if (index >= 0) uploadQueue.splice(index, 1);
+                removeUploadTask(job);
+                if (uploadQueuePaused && uploadQueue.length === 0) {
+                    while (queuePauseWaiters.length) queuePauseWaiters.shift()();
                 }
+                return;
             }
-
-            // 3路并发：每批最多3个文件同时处理
-            for (let i = 0; i < items.length; i += CONCURRENCY) {
-                const batch = items.slice(i, i + CONCURRENCY);
-                await Promise.all(batch.map(processOne));
+            if (['complete', 'cached', 'error', 'cancelled'].includes(job.status)) {
+                removeUploadTask(job);
+                return;
             }
+            job.deleteRequested = true;
+            job.cancelRequested = true;
+            renderTask(job, 'cancelling', '正在停止当前任务，结束后将从列表移除');
+            if (job.cancelChoice) {
+                job.cancelChoice();
+                return;
+            }
+            try {
+                await fetch('/upload/cancel', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ task_id: String(job.id) }),
+                });
+            } catch (error) {
+                console.warn('无法发送取消请求', error);
+            }
+        }
 
+        function renderTask(job, status, detail, icon) {
+            job.status = status;
+            job.item.dataset.status = status;
+            job.item.className = `progress-item${status === 'queued' ? ' queued' : ''}${status === 'cached' ? ' warning' : ''}${status === 'cancelled' ? ' cancelled' : ''}`;
+            job.item.replaceChildren();
+            const state = document.createElement(status === 'running' || status === 'cancelling' || status === 'queued' ? 'span' : 'div');
+            if (status === 'running' || status === 'cancelling') state.className = 'spinner';
+            else {
+                state.className = status === 'complete' ? 'check' : status === 'error' ? 'cross' : status === 'queued' ? 'task-state' : 'warn';
+                state.textContent = icon || (status === 'complete' ? '✓' : status === 'error' ? '×' : status === 'cancelled' ? '–' : '↻');
+            }
+            const name = document.createElement('div');
+            name.className = 'info';
+            name.textContent = job.file.name;
+            const statusDetail = document.createElement('div');
+            statusDetail.className = 'detail';
+            statusDetail.textContent = detail;
+            job.item.append(state, name, statusDetail);
+            if (['queued', 'running', 'complete', 'cached', 'error', 'cancelled'].includes(status)) {
+                const cancelButton = document.createElement('button');
+                cancelButton.type = 'button';
+                cancelButton.className = 'task-cancel-button';
+                cancelButton.textContent = '删除';
+                cancelButton.addEventListener('click', () => deleteUploadTask(job.id));
+                job.item.appendChild(cancelButton);
+            } else if (status === 'cancelling') {
+                const cancelButton = document.createElement('button');
+                cancelButton.type = 'button';
+                cancelButton.className = 'task-cancel-button';
+                cancelButton.disabled = true;
+                cancelButton.textContent = '删除中';
+                job.item.appendChild(cancelButton);
+            }
+            updateQueueSummary();
+        }
+
+        async function runUploadQueue() {
+            if (uploadQueueRunning) return;
+            uploadQueueRunning = true;
+            while (uploadQueue.length) {
+                await waitForQueueResume();
+                const job = uploadQueue.shift();
+                if (!job || job.status !== 'queued') continue;
+                await processUploadTask(job);
+            }
+            uploadQueueRunning = false;
+            updateQueueSummary();
             loadResults();
             loadHistory(true);
+        }
+
+        async function processUploadTask(job) {
+            const file = job.file;
+            renderTask(job, 'running', '识别中');
+            try {
+                let data = await uploadInvoiceFile(job, false);
+                if (data.cancelled || (job.cancelRequested && data.duplicate)) {
+                    renderTask(job, 'cancelled', '已取消，未保存本次识别结果');
+                    return;
+                }
+                if (data.success && data.duplicate && data.reused_from_cache) {
+                    const cached = data.invoice;
+                    const choice = await askDuplicateChoice(cached, job);
+                    if (choice === 'cancel') {
+                        renderTask(job, 'cancelled', '已取消，未更改历史记录');
+                        return;
+                    }
+                    if (choice === 'cache') {
+                        renderTask(job, 'cached', `重复票据，已打开缓存 · ${cached.invoice_num || ''} · ${cached.item_count} 条`);
+                        await loadResults();
+                        showToast('重复发票，已从缓存打开', 'warning');
+                        return;
+                    }
+                    renderTask(job, 'running', '重新识别并替换历史记录中');
+                    data = await uploadInvoiceFile(job, true);
+                    if (data.cancelled) {
+                        renderTask(job, 'cancelled', '已取消，未保存本次识别结果');
+                        return;
+                    }
+                }
+                if (!data.success) {
+                    renderTask(job, 'error', data.error || data.warning || '识别失败', '×');
+                    return;
+                }
+                const invoice = data.invoice;
+                if (data.reused_from_cache) {
+                    renderTask(job, 'cached', `${data.warning} · ${invoice.invoice_num || ''} · ${invoice.item_count} 条`);
+                    await loadResults();
+                    return;
+                }
+                const details = [invoice.invoice_num, `${invoice.item_count} 条明细`];
+                if (data.replaced_existing) details.push('最新结果已替换原记录');
+                if (data.has_incomplete) details.push('部分字段未完整识别');
+                if (data.retry_count > 0) details.push(`重试 ${data.retry_count} 次`);
+                renderTask(job, 'complete', details.filter(Boolean).join(' · '), '✓');
+                await loadResults();
+                if (data.replaced_existing) showToast('已重新识别，最新结果已替换历史记录', 'success');
+            } catch (error) {
+                renderTask(job, 'error', `错误：${error.message}`, '×');
+            } finally {
+                if (job.deleteRequested) removeUploadTask(job);
+            }
+        }
+
+        async function uploadInvoiceFile(job, forceReprocess) {
+            const formData = new FormData();
+            formData.append('file', job.file);
+            formData.append('task_id', String(job.id));
+            if (forceReprocess) formData.append('force_reprocess', 'true');
+            const response = await fetch('/upload', { method: 'POST', body: formData });
+            return response.json();
+        }
+
+        function askDuplicateChoice(invoice, job) {
+            const choice = duplicateDialogQueue.then(() => showDuplicateDialog(invoice, job));
+            duplicateDialogQueue = choice.then(() => undefined, () => undefined);
+            return choice;
+        }
+
+        function showDuplicateDialog(invoice, job) {
+            return new Promise((resolve) => {
+                const root = document.getElementById('duplicateDialogRoot');
+                root.innerHTML = `
+                    <div class="duplicate-dialog-backdrop" role="presentation">
+                        <section class="duplicate-dialog" role="dialog" aria-modal="true" aria-labelledby="duplicateDialogTitle" aria-describedby="duplicateDialogDescription">
+                            <h2 id="duplicateDialogTitle">发现重复发票</h2>
+                            <p class="duplicate-number" id="duplicateInvoiceNumber"></p>
+                            <p id="duplicateDialogDescription">该票号已有保存记录。你可以重新识别并替换记录，也可以直接打开已保存的结果。</p>
+                            <p class="duplicate-countdown" id="duplicateCountdown">60 秒后将自动打开缓存结果</p>
+                            <div class="duplicate-dialog-actions">
+                                <button class="btn btn-secondary" id="useCachedInvoice" type="button">打开缓存结果</button>
+                                <button class="btn btn-primary" id="reprocessInvoice" type="button">重新识别并替换</button>
+                            </div>
+                        </section>
+                    </div>`;
+                const backdrop = root.querySelector('.duplicate-dialog-backdrop');
+                root.querySelector('#duplicateInvoiceNumber').textContent = `发票号码：${invoice.invoice_num || '票号未知'}`;
+                const countdown = root.querySelector('#duplicateCountdown');
+                let secondsLeft = 60;
+                let settled = false;
+                const finish = (choice) => {
+                    if (settled) return;
+                    settled = true;
+                    clearInterval(timer);
+                    document.removeEventListener('keydown', onKeyDown);
+                    job.cancelChoice = null;
+                    root.innerHTML = '';
+                    resolve(choice);
+                };
+                const onKeyDown = (event) => { if (event.key === 'Escape') finish('cache'); };
+                job.cancelChoice = () => finish('cancel');
+                const timer = setInterval(() => {
+                    secondsLeft -= 1;
+                    if (secondsLeft <= 0) finish(false);
+                    else countdown.textContent = `${secondsLeft} 秒后将自动打开缓存结果`;
+                }, 1000);
+                root.querySelector('#useCachedInvoice').addEventListener('click', () => finish('cache'));
+                root.querySelector('#reprocessInvoice').addEventListener('click', () => finish('replace'));
+                backdrop.addEventListener('click', (event) => { if (event.target === backdrop) finish('cache'); });
+                document.addEventListener('keydown', onKeyDown);
+                root.querySelector('#reprocessInvoice').focus();
+            });
         }
 
         // ==================== Results ====================
@@ -459,7 +711,24 @@
         }
 
         async function deleteInvoice(id) { if (!confirm('确认移到回收站？')) return; await fetch(`/delete/${id}`, { method: 'DELETE' }); loadResults(); loadHistory(true); }
-        async function clearAll() { if (!confirm('确认新建批次？\n当前列表将清空，历史记录保留。')) return; await fetch('/clear'); progressSection.innerHTML=''; progressSection.classList.remove('active'); loadResults(); showToast('已清空当前列表，可开始上传新一批发票', 'success'); }
+        async function clearAll() {
+            if (!confirm('确认新建批次？\n当前列表将清空，历史记录保留。')) return;
+            try {
+                const response = await fetch('/clear');
+                const data = await response.json();
+                if (!response.ok || !data.success) throw new Error(data.error || '清空当前批次失败');
+
+                // Keep the queue controls and task-list container mounted so later uploads still work.
+                uploadTasks.slice()
+                    .filter(task => ['complete', 'cached', 'error', 'cancelled'].includes(task.status))
+                    .forEach(removeUploadTask);
+                progressSection.classList.toggle('active', uploadTasks.length > 0);
+                await loadResults();
+                showToast('已清空当前列表，可开始上传新一批发票', 'success');
+            } catch (error) {
+                showToast(error.message, 'error');
+            }
+        }
         function downloadExcel() { window.location.href = '/download'; }
 
         // ==================== History Sidebar ====================

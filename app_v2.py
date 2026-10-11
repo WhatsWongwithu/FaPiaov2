@@ -10,6 +10,7 @@ import os
 import json
 import uuid
 import sqlite3
+import threading
 from functools import wraps
 from flask import (
     Flask, request, jsonify, send_file, render_template,
@@ -22,6 +23,12 @@ from openpyxl.worksheet.table import Table, TableStyleInfo
 from datetime import datetime, timedelta
 
 from ocr_engine import OCREngine
+from invoice_parser import parse_invoice as parse_invoice_with_coordinates
+from xiaomi_ollama import (
+    call_xiaomi_ocr,
+    check_local_ocr_available,
+    parse_cell_table,
+)
 from llm_parser import (
     DeepSeekConnectionError,
     evaluate_invoice_quality,
@@ -42,9 +49,38 @@ PDF_EXTENSIONS = (".pdf",)
 ALL_EXTENSIONS = IMAGE_EXTENSIONS + PDF_EXTENSIONS
 
 app = Flask(__name__)
-app.secret_key = "huichi-fapiao-2026-secret-key-fixed"
+# Set FLASK_SECRET_KEY to a stable, private value in deployed environments.
+# The random fallback keeps local development usable, but invalidates sessions
+# whenever the server restarts.
+app.secret_key = os.environ.get("FLASK_SECRET_KEY") or os.urandom(32)
 app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024
 app.permanent_session_lifetime = timedelta(hours=24)
+
+_upload_cancel_lock = threading.Lock()
+_upload_cancel_events = {}
+
+
+class UploadCancelled(Exception):
+    pass
+
+
+def _get_upload_cancel_event(task_id):
+    if not task_id:
+        return None
+    with _upload_cancel_lock:
+        return _upload_cancel_events.setdefault(task_id, threading.Event())
+
+
+def _check_upload_cancelled(task_id):
+    event = _get_upload_cancel_event(task_id)
+    if event and event.is_set():
+        raise UploadCancelled("任务已取消，识别结果未保存")
+
+
+def _clear_upload_cancel_event(task_id):
+    if task_id:
+        with _upload_cancel_lock:
+            _upload_cancel_events.pop(task_id, None)
 
 ocr_engine = OCREngine()
 
@@ -80,9 +116,17 @@ def init_db():
             username          TEXT UNIQUE NOT NULL,
             password_hash     TEXT NOT NULL,
             deepseek_api_key  TEXT DEFAULT '',
+            recognition_mode  TEXT NOT NULL DEFAULT 'deepseek',
             created_at        TEXT
         )
     """)
+    user_columns = {
+        row["name"] for row in conn.execute("PRAGMA table_info(users)").fetchall()
+    }
+    if "recognition_mode" not in user_columns:
+        conn.execute(
+            "ALTER TABLE users ADD COLUMN recognition_mode TEXT NOT NULL DEFAULT 'deepseek'"
+        )
     invoice_columns = {
         row["name"] for row in conn.execute("PRAGMA table_info(invoices)").fetchall()
     }
@@ -326,6 +370,52 @@ def _save_to_history(invoice, uploaded_by):
     conn.close()
 
 
+def _save_to_history_if_not_cancelled(invoice, uploaded_by, task_id):
+    with _upload_cancel_lock:
+        event = _upload_cancel_events.get(task_id) if task_id else None
+        if event and event.is_set():
+            raise UploadCancelled("任务已取消，识别结果未保存")
+        _save_to_history(invoice, uploaded_by)
+
+
+def _replace_history_invoice(invoice, uploaded_by, existing_id, task_id=""):
+    """Replace a previously saved invoice while preserving its history identity."""
+    invoice["id"] = existing_id
+    created_at = datetime.now().isoformat()
+    with _upload_cancel_lock:
+        event = _upload_cancel_events.get(task_id) if task_id else None
+        if event and event.is_set():
+            raise UploadCancelled("任务已取消，识别结果未保存")
+        conn = get_db()
+        conn.execute(
+            """UPDATE invoices
+               SET invoice_num = ?, date = ?, seller_name = ?, total_amount = ?,
+                   items = ?, filename = ?, created_at = ?
+               WHERE id = ? AND uploaded_by = ? AND deleted_at IS NULL""",
+            (invoice.get("invoice_num", ""), invoice.get("date", ""),
+             invoice.get("seller_name", ""), invoice.get("total_amount", ""),
+             json.dumps(invoice.get("items", []), ensure_ascii=False),
+             invoice.get("filename", ""), created_at, existing_id, uploaded_by),
+        )
+        updated = conn.total_changes > 0
+        conn.commit()
+        conn.close()
+    if not updated:
+        return False
+
+    for index, old_invoice in enumerate(invoices_store):
+        if old_invoice.get("id") == existing_id:
+            invoices_store[index] = invoice
+            break
+    else:
+        invoices_store.append(invoice)
+    return True
+
+
+def _is_force_reprocess():
+    return str(request.form.get("force_reprocess", "")).lower() in ("1", "true", "yes")
+
+
 def _client_ip():
     forwarded_for = request.headers.get("X-Forwarded-For", "")
     if forwarded_for:
@@ -405,19 +495,57 @@ def _restore_invoice(invoice_id, username):
 
 
 def _check_duplicate(inv_num, username):
-    for existing in invoices_store:
-        if existing.get("invoice_num", "") == inv_num and existing.get("uploaded_by") == username:
-            return existing.get("filename", "未知文件")
+    """Return the saved invoice matching this user's invoice number, if any."""
+    inv_num = str(inv_num or "").strip()
+    if not inv_num:
+        return None
     conn = get_db()
     row = conn.execute(
-        """SELECT filename FROM invoices
-           WHERE invoice_num = ? AND uploaded_by = ? AND deleted_at IS NULL""",
+        """SELECT * FROM invoices
+           WHERE TRIM(invoice_num) = ? AND uploaded_by = ? AND deleted_at IS NULL
+           ORDER BY created_at DESC LIMIT 1""",
         (inv_num, username),
     ).fetchone()
     conn.close()
-    if row:
-        return row["filename"]
-    return None
+    if not row:
+        return None
+    invoice = dict(row)
+    try:
+        invoice["items"] = json.loads(invoice.get("items") or "[]")
+    except (TypeError, json.JSONDecodeError):
+        invoice["items"] = []
+    invoice["item_count"] = len(invoice["items"])
+    return invoice
+
+
+def _reuse_cached_invoice(invoice):
+    """Add a cached history invoice to the current batch once, for table/export use."""
+    if not any(item.get("id") == invoice.get("id") for item in invoices_store):
+        invoices_store.append(invoice)
+
+
+def _public_invoice(invoice):
+    return {
+        "id": invoice["id"],
+        "filename": invoice.get("filename", ""),
+        "date": invoice.get("date", ""),
+        "invoice_num": invoice.get("invoice_num", ""),
+        "total_amount": invoice.get("total_amount", ""),
+        "seller_name": invoice.get("seller_name", ""),
+        "item_count": len(invoice.get("items", [])),
+        "items": invoice.get("items", []),
+    }
+
+
+def get_user_recognition_mode(user_id):
+    conn = get_db()
+    row = conn.execute(
+        "SELECT recognition_mode FROM users WHERE id = ?", (user_id,)
+    ).fetchone()
+    conn.close()
+    if row and row["recognition_mode"] in ("deepseek", "local"):
+        return row["recognition_mode"]
+    return "deepseek"
 
 
 def _get_user_invoices():
@@ -461,17 +589,23 @@ def logout():
 def settings():
     if request.method == "GET":
         conn = get_db()
-        user = conn.execute("SELECT deepseek_api_key FROM users WHERE id = ?",
+        user = conn.execute("SELECT deepseek_api_key, recognition_mode FROM users WHERE id = ?",
                             (session["user_id"],)).fetchone()
         conn.close()
         saved_key = user["deepseek_api_key"] if user else ""
         has_key = bool(saved_key)
         key_hint = f"末四位 {saved_key[-4:]}" if len(saved_key) >= 4 else "已安全保存"
+        recognition_mode = user["recognition_mode"] if user else "deepseek"
+        activation_requested = request.args.get("enable") == "deepseek"
         return render_template(
             "settings.html",
             username=session.get("username", ""),
             has_key=has_key,
             key_hint=key_hint,
+            recognition_mode=recognition_mode,
+            selected_mode=("deepseek" if activation_requested else recognition_mode),
+            activation_requested=activation_requested,
+            show_api_config=activation_requested,
         )
 
     if request.method == "DELETE":
@@ -495,6 +629,54 @@ def settings():
     conn.commit()
     conn.close()
     return jsonify({"success": True, "message": "API Key 已保存", "redirect": "/"})
+
+
+@app.route("/api/user/recognition-mode", methods=["POST"])
+@login_required
+def set_recognition_mode():
+    data = request.get_json(silent=True) or {}
+    mode = str(data.get("mode") or "").strip()
+    user_id = session["user_id"]
+
+    if mode == "local":
+        try:
+            check_local_ocr_available()
+        except RuntimeError as exc:
+            return jsonify({"success": False, "error": str(exc)}), 400
+        conn = get_db()
+        conn.execute("UPDATE users SET recognition_mode = 'local' WHERE id = ?", (user_id,))
+        conn.commit()
+        conn.close()
+        return jsonify({"success": True, "message": "本地票据识别已启用"})
+
+    if mode == "deepseek":
+        conn = get_db()
+        user = conn.execute(
+            "SELECT deepseek_api_key FROM users WHERE id = ?", (user_id,)
+        ).fetchone()
+        conn.close()
+        api_key = user["deepseek_api_key"] if user else ""
+        if not api_key:
+            return jsonify({
+                "success": False,
+                "error": "当前账号尚未配置 DeepSeek API Key，请先完成 API 配置。",
+                "redirect": "/settings?enable=deepseek",
+            }), 400
+        try:
+            result = test_deepseek_connection(api_key)
+        except DeepSeekConnectionError as exc:
+            return jsonify({"success": False, "error": str(exc)}), 400
+        conn = get_db()
+        conn.execute("UPDATE users SET recognition_mode = 'deepseek' WHERE id = ?", (user_id,))
+        conn.commit()
+        conn.close()
+        return jsonify({
+            "success": True,
+            "message": "OCR 识别与云端结构化解析已启用",
+            "model": result["model"],
+        })
+
+    return jsonify({"success": False, "error": "未知的识别方式"}), 400
 
 
 @app.route("/api/user/test_key", methods=["POST"])
@@ -655,8 +837,10 @@ def delete_history(hid):
 @app.route("/")
 @login_required
 def index():
+    recognition_mode = get_user_recognition_mode(session["user_id"])
     return render_template("index_v2.html",
-                           username=session.get("username", ""))
+                           username=session.get("username", ""),
+                           recognition_mode=recognition_mode)
 
 
 @app.route("/upload", methods=["POST"])
@@ -670,18 +854,27 @@ def upload():
     if ext not in ALL_EXTENSIONS:
         return jsonify({"error": f"不支持的格式: {ext}"}), 400
 
+    if get_user_recognition_mode(session["user_id"]) == "local":
+        task_id = str(request.form.get("task_id", ""))
+        _get_upload_cancel_event(task_id)
+        return _process_local_upload(file, task_id=task_id)
+
     user_api_key = get_user_api_key(session["user_id"])
     if not user_api_key:
         return jsonify({
             "error": "尚未配置 DeepSeek API Key，请先前往设置页配置"
         }), 400
 
+    task_id = str(request.form.get("task_id", ""))
+    _get_upload_cancel_event(task_id)
     safe_name = f"{uuid.uuid4().hex}{ext}"
     file_path = os.path.join(UPLOAD_DIR, safe_name)
     file.save(file_path)
 
     try:
+        _check_upload_cancelled(task_id)
         ocr_results = ocr_engine.recognize(file_path)
+        _check_upload_cancelled(task_id)
 
         max_attempts = 3
         candidates = []
@@ -690,7 +883,9 @@ def upload():
             if attempt > 0:
                 print(f"  [重试 {attempt}/{max_attempts-1}] {file.filename} 重新解析并评分...")
             try:
+                _check_upload_cancelled(task_id)
                 candidate = parse_with_deepseek(ocr_results, user_api_key)
+                _check_upload_cancelled(task_id)
                 _drop_empty_items(candidate)
                 quality = evaluate_invoice_quality(candidate)
                 candidates.append((quality["score"], quality["matched_rows"], candidate, quality))
@@ -698,6 +893,8 @@ def upload():
                       f"{quality['matched_rows']}/{quality['total_rows']}行金额匹配")
                 if quality["score"] >= 96 and not _has_missing_fields(candidate):
                     break
+            except UploadCancelled:
+                raise
             except Exception as exc:
                 parse_errors.append(exc)
                 print(f"  [解析失败] {file.filename}: {exc}")
@@ -717,40 +914,155 @@ def upload():
         if retry_count > 0:
             print(f"  [择优完成] {file.filename} 从 {len(candidates)} 个候选中选择评分最高结果")
 
+        _check_upload_cancelled(task_id)
+
         # 检查择优后是否仍有空字段或发票级校验异常
         has_incomplete = _has_missing_fields(invoice) or best_score < 90
 
         inv_num = invoice.get("invoice_num", "")
         if inv_num:
-            dup_file = _check_duplicate(inv_num, session.get("username", ""))
-            if dup_file:
-                return jsonify({
-                    "success": False, "duplicate": True,
-                    "warning": f"重复发票！票号 {inv_num} 已存在（来自 {dup_file}），已跳过。",
-                })
+            cached_invoice = _check_duplicate(inv_num, session.get("username", ""))
+            if cached_invoice:
+                if not _is_force_reprocess():
+                    _reuse_cached_invoice(cached_invoice)
+                    return jsonify({
+                        "success": True,
+                        "duplicate": True,
+                        "reused_from_cache": True,
+                        "warning": "检测到相同票号的历史发票",
+                        "invoice": _public_invoice(cached_invoice),
+                    })
+                invoice["filename"] = file.filename
+                invoice["uploaded_by"] = session.get("username", "")
+                _check_upload_cancelled(task_id)
+                if _replace_history_invoice(invoice, session.get("username", ""), cached_invoice["id"], task_id):
+                    return jsonify({
+                        "success": True,
+                        "replaced_existing": True,
+                        "retry_count": retry_count,
+                        "has_incomplete": has_incomplete,
+                        "invoice": _public_invoice(invoice),
+                    })
 
+        _check_upload_cancelled(task_id)
         invoice["id"] = uuid.uuid4().hex
         invoice["filename"] = file.filename
         invoice["uploaded_by"] = session.get("username", "")
+        _save_to_history_if_not_cancelled(invoice, session.get("username", ""), task_id)
         invoices_store.append(invoice)
-        _save_to_history(invoice, session.get("username", ""))
 
         return jsonify({
             "success": True,
             "retry_count": retry_count,
             "has_incomplete": has_incomplete,
-            "invoice": {
-                "id": invoice["id"], "filename": invoice["filename"],
-                "date": invoice["date"], "invoice_num": invoice["invoice_num"],
-                "total_amount": invoice["total_amount"],
-                "seller_name": invoice["seller_name"],
-                "item_count": len(invoice["items"]),
-                "items": invoice["items"],
-            },
+            "invoice": _public_invoice(invoice),
         })
+    except UploadCancelled as exc:
+        return jsonify({"success": False, "cancelled": True, "error": str(exc)}), 200
     except Exception as e:
         return jsonify({"error": f"处理异常: {str(e)}"}), 200
     finally:
+        _clear_upload_cancel_event(task_id)
+        if os.path.exists(file_path):
+            os.remove(file_path)
+
+
+@app.route("/upload/cancel", methods=["POST"])
+@login_required
+def cancel_upload():
+    data = request.get_json(silent=True) or {}
+    task_id = str(data.get("task_id", "")).strip()
+    if not task_id:
+        return jsonify({"success": False, "error": "缺少任务编号"}), 400
+    with _upload_cancel_lock:
+        event = _upload_cancel_events.get(task_id)
+        if event is not None:
+            event.set()
+    if event is None:
+        return jsonify({"success": True, "completed": True, "message": "任务已经结束"})
+    return jsonify({"success": True, "message": "已请求取消；当前推理结束后将丢弃结果"})
+
+
+@app.route("/upload_xiaomi", methods=["POST"])
+@login_required
+def upload_xiaomi():
+    """Compatibility endpoint for the local invoice recognition path."""
+    if get_user_recognition_mode(session["user_id"]) != "local":
+        return jsonify({
+            "error": "当前账号未启用本地票据识别，请在设置中启用后重试。"
+        }), 409
+    file = request.files.get("file")
+    if not file:
+        return jsonify({"error": "未收到文件"}), 400
+
+    task_id = str(request.form.get("task_id", ""))
+    _get_upload_cancel_event(task_id)
+    return _process_local_upload(file, task_id=task_id)
+
+
+def _process_local_upload(file, task_id=""):
+    """Run the locally hosted vision model and cache duplicate invoice results."""
+
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext not in ALL_EXTENSIONS:
+        return jsonify({"error": f"不支持的格式: {ext}"}), 400
+
+    safe_name = f"{uuid.uuid4().hex}{ext}"
+    file_path = os.path.join(UPLOAD_DIR, safe_name)
+    file.save(file_path)
+    try:
+        _check_upload_cancelled(task_id)
+        ocr_results = ocr_engine.recognize(file_path)
+        _check_upload_cancelled(task_id)
+        invoice = parse_invoice_with_coordinates(ocr_results)
+        _check_upload_cancelled(task_id)
+        raw_table = call_xiaomi_ocr(file_path)
+        _check_upload_cancelled(task_id)
+        invoice["items"] = parse_cell_table(raw_table)
+        _drop_empty_items(invoice)
+
+        inv_num = invoice.get("invoice_num", "")
+        if inv_num:
+            _check_upload_cancelled(task_id)
+            cached_invoice = _check_duplicate(inv_num, session.get("username", ""))
+            if cached_invoice:
+                if not _is_force_reprocess():
+                    _reuse_cached_invoice(cached_invoice)
+                    return jsonify({
+                        "success": True,
+                        "duplicate": True,
+                        "reused_from_cache": True,
+                        "warning": "检测到相同票号的历史发票",
+                        "invoice": _public_invoice(cached_invoice),
+                    })
+                invoice["filename"] = file.filename
+                invoice["uploaded_by"] = session.get("username", "")
+                _check_upload_cancelled(task_id)
+                if _replace_history_invoice(invoice, session.get("username", ""), cached_invoice["id"], task_id):
+                    return jsonify({
+                        "success": True,
+                        "replaced_existing": True,
+                        "retry_count": 0,
+                        "invoice": _public_invoice(invoice),
+                    })
+
+        _check_upload_cancelled(task_id)
+        invoice["id"] = uuid.uuid4().hex
+        invoice["filename"] = file.filename
+        invoice["uploaded_by"] = session.get("username", "")
+        _save_to_history_if_not_cancelled(invoice, session.get("username", ""), task_id)
+        invoices_store.append(invoice)
+        return jsonify({
+            "success": True,
+            "retry_count": 0,
+            "invoice": _public_invoice(invoice),
+        })
+    except UploadCancelled as exc:
+        return jsonify({"success": False, "cancelled": True, "error": str(exc)}), 200
+    except Exception as exc:
+        return jsonify({"error": f"Xiaomi-OCR处理失败: {exc}"}), 200
+    finally:
+        _clear_upload_cancel_event(task_id)
         if os.path.exists(file_path):
             os.remove(file_path)
 

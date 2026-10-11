@@ -6,3 +6,4 @@ opencv-python-headless>=4.8
 gunicorn>=21.0
 werkzeug>=3.0
 requests>=2.31
+Pillow>=10.0

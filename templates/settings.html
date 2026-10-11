@@ -76,6 +76,28 @@
         .page-heading h1 { margin: 0; font-size: 24px; line-height: 1.3; }
         .page-heading p { margin: 7px 0 0; color: var(--muted); font-size: 13px; line-height: 1.6; }
 
+        .engine-picker {
+            margin-bottom: 20px;
+            padding: 24px 28px;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            background: var(--surface);
+            box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04);
+        }
+        .engine-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+        .engine-option {
+            display: flex; align-items: flex-start; gap: 12px; padding: 16px;
+            border: 1px solid var(--border); border-radius: var(--radius); cursor: pointer;
+            transition: border-color 160ms ease, background 160ms ease;
+        }
+        .engine-option:has(input:checked) { border-color: var(--primary); background: var(--primary-soft); }
+        .engine-option input { margin-top: 3px; accent-color: var(--primary); }
+        .engine-option strong { display: block; font-size: 13px; }
+        .engine-option span { display: block; margin-top: 5px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+        .engine-action { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 16px; }
+        .engine-feedback { color: var(--muted); font-size: 12px; line-height: 1.5; }
+        .engine-feedback.error { color: var(--danger); }
+
         .settings-layout {
             display: grid;
             grid-template-columns: minmax(0, 1fr) 280px;
@@ -84,6 +106,9 @@
             overflow: hidden;
             background: var(--surface);
             box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04);
+        }
+        #apiConfigSection[hidden] {
+            display: none !important;
         }
         .settings-main { padding: 28px; }
         .settings-side { padding: 24px; border-left: 1px solid var(--border); background: var(--subtle); }
@@ -192,6 +217,9 @@
             .settings-layout { grid-template-columns: 1fr; }
             .settings-main { padding: 20px; }
             .settings-side { padding: 20px; border-left: 0; border-top: 1px solid var(--border); }
+            .engine-picker { padding: 20px; }
+            .engine-options { grid-template-columns: 1fr; }
+            .engine-action { align-items: stretch; flex-direction: column; }
             .action-bar { align-items: stretch; flex-direction: column-reverse; }
             .action-group { display: grid; grid-template-columns: 1fr 1fr; }
             .btn { width: 100%; }
@@ -202,7 +230,8 @@
         }
     </style>
 </head>
-<body data-has-key="{{ 'true' if has_key else 'false' }}">
+<body data-has-key="{{ 'true' if has_key else 'false' }}"
+      data-enable-deepseek="{{ 'true' if activation_requested else 'false' }}">
     <header class="topbar">
         <div class="brand">
             <div class="brand-mark" aria-hidden="true">辉</div>
@@ -221,12 +250,36 @@
     <main class="page-shell">
         <div class="page-heading">
             <div>
-                <h1>API 配置</h1>
-                <p>管理当前账号的 DeepSeek 接入，用于发票表格理解与字段提取。</p>
+                <h1>设置</h1>
+                <p>选择当前账号使用的发票识别方式。</p>
             </div>
         </div>
 
-        <div class="settings-layout">
+        <section class="engine-picker" aria-labelledby="engineTitle">
+            <div class="section-title">
+                <h2 id="engineTitle">识别方式</h2>
+                <p>选择后点击“保存并启用”。识别方式仅作用于当前账号。</p>
+            </div>
+            <div class="engine-options">
+                <label class="engine-option">
+                    <input type="radio" name="recognitionMode" value="deepseek" {% if selected_mode == 'deepseek' %}checked{% endif %}>
+                    <div><strong>OCR 识别与云端结构化解析</strong><span>先用 OCR 引擎提取文字，再由 DeepSeek API 整理发票字段。</span></div>
+                </label>
+                <label class="engine-option">
+                    <input type="radio" name="recognitionMode" value="local" {% if selected_mode == 'local' %}checked{% endif %}>
+                    <div><strong>本地票据识别</strong><span>通过本机 Ollama 模型识别，无需云端 API。</span></div>
+                </label>
+            </div>
+            <div class="engine-action">
+                <div class="engine-feedback" id="engineFeedback" aria-live="polite">
+                    当前启用：{{ '本地票据识别' if recognition_mode == 'local' else 'OCR 识别与云端结构化解析' }}
+                </div>
+                <button class="btn btn-primary" id="saveEngineButton" type="button" onclick="saveRecognitionMode()">保存并启用</button>
+            </div>
+        </section>
+
+        {% if show_api_config %}
+        <div class="settings-layout" id="apiConfigSection">
             <section class="settings-main" aria-labelledby="configTitle">
                 <div class="status-band" aria-live="polite">
                     <div>
@@ -237,8 +290,8 @@
                 </div>
 
                 <div class="section-title">
-                    <h2 id="configTitle">DeepSeek API Key</h2>
-                    <p>已保存的 Key 不会在页面中回显，输入新 Key 并保存即可替换。</p>
+                    <h2 id="configTitle">OCR 识别与云端结构化解析配置</h2>
+                    <p>OCR 引擎负责文字识别，DeepSeek API 负责整理发票结构。配置完成并通过连接验证后，此识别方式才会启用。</p>
                 </div>
 
                 <div id="feedback" class="feedback" role="status" aria-live="polite"></div>
@@ -268,8 +321,11 @@
                         移除 Key
                     </button>
                     <div class="action-group">
+                        {% if activation_requested and has_key %}
+                        <button class="btn btn-secondary" id="activateButton" type="button" onclick="activateDeepseek()">测试并启用云端结构化解析</button>
+                        {% endif %}
                         <button class="btn btn-secondary" id="testButton" type="button" onclick="testKey()">测试连接</button>
-                        <button class="btn btn-primary" id="saveButton" type="button" onclick="saveKey()">保存并启用</button>
+                        <button class="btn btn-primary" id="saveButton" type="button" onclick="saveKey()">{% if activation_requested %}保存并启用云端结构化解析{% else %}保存 API Key{% endif %}</button>
                     </div>
                 </div>
             </section>
@@ -293,13 +349,62 @@
                 </div>
             </aside>
         </div>
+        {% endif %}
     </main>
 
     <script>
         let hasSavedKey = document.body.dataset.hasKey === 'true';
+        const activationRequested = document.body.dataset.enableDeepseek === 'true';
+
+        document.querySelectorAll('input[name="recognitionMode"]').forEach((input) => {
+            input.addEventListener('change', () => {
+                const apiConfig = document.getElementById('apiConfigSection');
+                if (!apiConfig) return;
+                if (input.value === 'local') {
+                    apiConfig.hidden = true;
+                    history.replaceState({}, '', '/settings');
+                } else {
+                    apiConfig.hidden = false;
+                    history.replaceState({}, '', '/settings?enable=deepseek');
+                    apiConfig.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            });
+        });
+
+        async function saveRecognitionMode() {
+            const selected = document.querySelector('input[name="recognitionMode"]:checked');
+            const feedback = document.getElementById('engineFeedback');
+            const button = document.getElementById('saveEngineButton');
+            if (!selected) return;
+            if (selected.value === 'deepseek') {
+                window.location.assign('/settings?enable=deepseek');
+                return;
+            }
+
+            button.disabled = true;
+            feedback.className = 'engine-feedback';
+            feedback.textContent = '正在检查 Ollama 和本地模型…';
+            try {
+                const response = await fetch('/api/user/recognition-mode', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ mode: 'local' }),
+                });
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok || !data.success) throw new Error(data.error || '启用失败');
+                feedback.textContent = data.message;
+                button.textContent = '已启用';
+                button.disabled = true;
+                history.replaceState({}, '', '/settings');
+            } catch (error) {
+                feedback.className = 'engine-feedback error';
+                feedback.textContent = error.message;
+                button.disabled = false;
+            }
+        }
 
         function setLoading(loading) {
-            ['removeButton', 'testButton', 'saveButton'].forEach((id) => {
+            ['removeButton', 'testButton', 'saveButton', 'activateButton'].forEach((id) => {
                 const button = document.getElementById(id);
                 if (button) button.disabled = loading || (id === 'removeButton' && !hasSavedKey);
             });
@@ -366,6 +471,10 @@
             const apiKeyInput = document.getElementById('apiKey');
             const apiKey = apiKeyInput.value.trim();
             if (!apiKey) {
+                if (activationRequested && hasSavedKey) {
+                    await activateDeepseek();
+                    return;
+                }
                 showFeedback('error', '请输入要保存的 API Key。');
                 apiKeyInput.focus();
                 return;
@@ -384,10 +493,36 @@
                 apiKeyInput.value = '';
                 apiKeyInput.placeholder = '输入新 Key 以替换当前配置';
                 document.getElementById('removeButton').disabled = false;
-                await testKey({ afterSave: true });
+                if (activationRequested) {
+                    await activateDeepseek();
+                } else {
+                    await testKey({ afterSave: true });
+                }
             } catch (error) {
                 setStatus('error', '配置保存失败', error.message, '未完成');
                 showFeedback('error', error.message);
+                setLoading(false);
+            }
+        }
+
+        async function activateDeepseek() {
+            setLoading(true);
+            setStatus('info', '正在检查 DeepSeek 接入', '验证 API Key 后启用识别方式…', '检查中');
+            showFeedback('info', '正在验证当前账号的 API Key。');
+            try {
+                const response = await fetch('/api/user/recognition-mode', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ mode: 'deepseek' }),
+                });
+                const data = await readJsonResponse(response);
+            setStatus('success', 'OCR 识别与云端结构化解析已启用', `DeepSeek 模型：${data.model}`, '已启用');
+                showFeedback('success', data.message);
+                window.setTimeout(() => window.location.assign('/'), 700);
+            } catch (error) {
+                setStatus('error', 'DeepSeek 启用失败', error.message, '不可用');
+                showFeedback('error', error.message);
+            } finally {
                 setLoading(false);
             }
         }
@@ -412,6 +547,11 @@
             } finally {
                 setLoading(false);
             }
+        }
+
+        if (activationRequested) {
+            document.getElementById('apiConfigSection')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            if (!hasSavedKey) document.getElementById('apiKey')?.focus({ preventScroll: true });
         }
     </script>
 </body>
