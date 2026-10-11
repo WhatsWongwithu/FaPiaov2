@@ -116,7 +116,7 @@ def init_db():
             username          TEXT UNIQUE NOT NULL,
             password_hash     TEXT NOT NULL,
             deepseek_api_key  TEXT DEFAULT '',
-            recognition_mode  TEXT NOT NULL DEFAULT 'deepseek',
+            recognition_mode  TEXT NOT NULL DEFAULT 'local',
             created_at        TEXT
         )
     """)
@@ -125,7 +125,28 @@ def init_db():
     }
     if "recognition_mode" not in user_columns:
         conn.execute(
-            "ALTER TABLE users ADD COLUMN recognition_mode TEXT NOT NULL DEFAULT 'deepseek'"
+            "ALTER TABLE users ADD COLUMN recognition_mode TEXT NOT NULL DEFAULT 'local'"
+        )
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS app_settings (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        )
+    """)
+    default_mode_migrated = conn.execute(
+        "SELECT 1 FROM app_settings WHERE key = 'local_ocr_default_migrated'"
+    ).fetchone()
+    if not default_mode_migrated:
+        # Existing accounts with no personal API key inherited the old
+        # DeepSeek default. Move those accounts to local OCR once, while
+        # preserving accounts with their own configured DeepSeek key.
+        conn.execute(
+            "UPDATE users SET recognition_mode = 'local' "
+            "WHERE recognition_mode = 'deepseek' "
+            "AND COALESCE(deepseek_api_key, '') = ''"
+        )
+        conn.execute(
+            "INSERT INTO app_settings (key, value) VALUES ('local_ocr_default_migrated', '1')"
         )
     invoice_columns = {
         row["name"] for row in conn.execute("PRAGMA table_info(invoices)").fetchall()
@@ -162,8 +183,8 @@ def init_db():
         existing = conn.execute("SELECT 1 FROM users WHERE username = ?", (acc["username"],)).fetchone()
         if not existing:
             conn.execute(
-                "INSERT INTO users (username, password_hash, deepseek_api_key, created_at) VALUES (?,?,?,?)",
-                (acc["username"], generate_password_hash(acc["password"]), "", datetime.now().isoformat()),
+                "INSERT INTO users (username, password_hash, deepseek_api_key, recognition_mode, created_at) VALUES (?,?,?,?,?)",
+                (acc["username"], generate_password_hash(acc["password"]), "", "local", datetime.now().isoformat()),
             )
             print(f"  账号: {acc['username']} / {acc['password']}")
     conn.commit()
@@ -545,7 +566,7 @@ def get_user_recognition_mode(user_id):
     conn.close()
     if row and row["recognition_mode"] in ("deepseek", "local"):
         return row["recognition_mode"]
-    return "deepseek"
+    return "local"
 
 
 def _get_user_invoices():
@@ -595,7 +616,7 @@ def settings():
         saved_key = user["deepseek_api_key"] if user else ""
         has_key = bool(saved_key)
         key_hint = f"末四位 {saved_key[-4:]}" if len(saved_key) >= 4 else "已安全保存"
-        recognition_mode = user["recognition_mode"] if user else "deepseek"
+        recognition_mode = user["recognition_mode"] if user else "local"
         activation_requested = request.args.get("enable") == "deepseek"
         return render_template(
             "settings.html",
